@@ -1,0 +1,18 @@
+[package]
+name = "hermes_rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = ["v94"]
+v89 = []
+v90 = []
+v93 = []
+v94 = []
+v95 = []
+
+[dependencies]
+
+[profile.release]
+strip = true

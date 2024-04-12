@@ -1,0 +1,6 @@
+/target
+.DS_Store
+.env
+**/**/*.hbc
+**/**/index.android.bundle
+junk
