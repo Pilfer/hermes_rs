@@ -238,6 +238,18 @@ I leaned heavily on the following projects and resources to develop this package
 
 There is a script in `./def_versions/_gen_macros.js` that reads and parses a Bytecode Definition file passed to it as the first argument and outputs a file containing the macro body to support the updated instructions.  
 
+```sh
+# How I generated them  
+
+cd ./def_versions
+
+node _gen_macros.js 89.def > ../src/hermes/v89/mod.rs
+node _gen_macros.js 90.def > ../src/hermes/v90/mod.rs
+node _gen_macros.js 93.def > ../src/hermes/v93/mod.rs
+node _gen_macros.js 94.def > ../src/hermes/v94/mod.rs
+node _gen_macros.js 95.def > ../src/hermes/v95/mod.rs
+```
+
 Example with a hypothetical `v100` version : 
 
 ```sh
@@ -258,7 +270,7 @@ From here, you'll add a new directory and `mod.rs` file for this version (`./src
 
 This could (and probably should) be a `build.rs` process.
 
-After creating this file, open up `./src/hermes/mod.rs` and navigate to the Instruction module imports and add the import, then populate the Instruction enum + trait + other functions' match statements with the new version.  
+After creating this file, open up `./src/hermes/mod.rs` and navigate to the Instruction module imports and add the import, then populate the Instruction enum + trait + other functions' match statements with the new version. You'll likely need to rely on the compiler to complain about missing match branches - there's only a few, though.    
 
 As this codebase evolves, you may need add branch arms in different matches.
 
@@ -317,16 +329,39 @@ let ins_obj: Option<Instruction> = match self.version {
 
 Finally, add the `feature` (`v100 = []`) to Cargo.toml.
 
+---  
+
 ## TODO  
 
-- [ ] Exception definition stuff  
+- [X] Break header structs out into their own files  
+- [ ] Add correct logic for FunctionHeader/SmallFunctionHeader  
+- [X] Exception definition stuff  
+  - Code quality for this is pretty bad - should probably go back over it later  
 - [ ] DebugInfo definition stuff  
-- [ ] Recompiling everything
-  - [ ] All structs  
-  - [ ] All flags    
+- [ ] Add comments  
+- [ ] Docs  
+- [ ] `Serializer` implementations    
+
+| Struct | Deserialize | Serialize | Size |  
+|--|--|--|--|  
+| HermesHeader | ✅ | ❌ | ❌ |  
+| SmallFunctionHeader | ✅ | ❌ | ❌ |  
+| StringKindEntry | ✅ | ✅ | ✅ |  
+| SmallStringTableEntry | ✅ | ✅ | ✅ |  
+| OverflowStringTableEntry | ✅ | ✅ | ✅ | 
+| BigIntTableEntry | ✅ | ❌ | ❌ |  
+| BytecodeOptions | ✅ | ✅ | ✅ |  
+| DebugInfoOffsets | ✅ | ✅ | ✅ |  
+| DebugInfoHeader | ✅ | ✅ | ✅ |  
+| DebugFileRegion | ✅ | ✅ | ✅ |  
+| ExceptionHandlerInfo | ✅ | ✅ | ✅ |  
+| RegExpTableEntry | ✅ | ❌ | ❌ |  
+| FunctionHeaderFlag | ✅ | ❌ | ❌ |  
+
 - [ ] Parse in the correct order:
 
 ```cpp
+// From official Hermes source code  
 void visitBytecodeSegmentsInOrder(Visitor &visitor) {
   visitor.visitFunctionHeaders();
   visitor.visitStringKinds();

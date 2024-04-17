@@ -47,7 +47,10 @@ fn main() {
         instr.serialize(&mut writer);
     }
 
-    assert!(writer == vec![115, 0, 2, 0, 98, 92, 0], "Bytecode is incorrect!");
+    assert!(
+        writer == vec![115, 0, 2, 0, 98, 92, 0],
+        "Bytecode is incorrect!"
+    );
     // if writer == vec![115, 0, 2, 0, 98, 92, 0] {
     //     println!("Bytecode is correct!");
     // } else {

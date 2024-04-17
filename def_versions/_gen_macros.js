@@ -98,11 +98,13 @@ const final_insns = insns.map((i, idx) => {
   let p_count = 0;
   let args = i.args.map(a => {
     if (a.includes('Reg')) {
+      let o = { var: `r${r_count}`, name: a };
       r_count++;
-      return { var: `r${r_count}`, name: a };
+      return o;
     } else {
+      let o = { var: `p${p_count}`, name: a };
       p_count++;
-      return { var: `p${p_count}`, name: a };
+      return o;
     }
   });
 

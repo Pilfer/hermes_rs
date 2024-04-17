@@ -62,16 +62,21 @@ where
 }
 
 #[allow(dead_code)]
-pub(crate) fn write_bitfield<W>(w: &mut W, value: u32, bits: u32) 
-where
-  W: std::io::Write,
-{
-  let mut shift = 0;
-  for _ in 0..bits {
-    let mask = 1 << shift;
-    let bit = (value & mask) >> shift;
-    w.write_all(&[bit as u8]).expect("Could not write bitfield");
-    shift += 1;
+pub(crate) fn write_bitfield(bits: &mut [u8], start_bit: usize, num_bits: usize, value: u32) {
+  let mut written_bits = 0;
+  let mut bit_idx = start_bit;
+
+  while written_bits < num_bits {
+      let byte_idx = bit_idx / 8;
+      let bits_in_current_byte = 8 - (bit_idx % 8);
+      let bits_to_write = std::cmp::min(bits_in_current_byte, num_bits - written_bits);
+
+      let mask = ((1 << bits_to_write) - 1) << (bit_idx % 8);
+      let byte_value = ((value >> written_bits) & ((1 << bits_to_write) - 1)) << (bit_idx % 8);
+
+      bits[byte_idx] = (bits[byte_idx] & !mask) | byte_value as u8;
+
+      written_bits += bits_to_write;
+      bit_idx += bits_to_write;
   }
 }
-
