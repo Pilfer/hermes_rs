@@ -59,8 +59,6 @@ for bidirectional communication or even just logging
 
 ## Installation  
 
-To do: Register crate
-
 `cargo add hermes_rs`
 
 
