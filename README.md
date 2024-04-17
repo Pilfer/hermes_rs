@@ -61,7 +61,7 @@ for bidirectional communication or even just logging
 
 To do: Register crate
 
-~~`cargo add hermes_rs`~~
+`cargo add hermes_rs`
 
 
 ## Usage  
