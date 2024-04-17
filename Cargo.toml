@@ -1,5 +1,7 @@
 [package]
 name = "hermes_rs"
+description = "A dependency-free disassembler and assembler for the Hermes bytecode"
+license = "MIT"
 version = "0.1.0"
 edition = "2021"
 
