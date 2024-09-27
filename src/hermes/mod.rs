@@ -1,21 +1,23 @@
 pub mod big_int_table;
 pub mod bytecode_options;
+pub mod cjs_module;
 pub mod debug_info;
 pub mod decode;
 pub mod encode;
 pub mod exception_handler;
+pub mod function_header;
+pub mod function_sources;
 pub mod header;
 pub mod regexp_table;
-pub mod small_function_header;
 pub mod string_kind;
 pub mod string_table;
 
 use std::io;
 
-pub use header::{HermesHeader, HermesStruct};
-pub use small_function_header::{
+pub use function_header::{
     FunctionHeaderFlag, FunctionHeaderFlagProhibitions, SmallFunctionHeader,
 };
+pub use header::{HermesHeader, HermesStruct};
 pub use string_kind::{StringKind, StringKindEntry};
 pub use string_table::{OverflowStringTableEntry, SmallStringTableEntry};
 
@@ -53,7 +55,6 @@ pub trait InstructionParser {
     fn is_jmp(&self) -> bool;
 
     fn get_address_field(&self) -> u32;
-
 }
 
 // Start macros
@@ -310,7 +311,7 @@ macro_rules! define_opcode {
         R: std::io::BufRead + std::io::Seek,
     {
       return Self{
-        op: op,
+        op,
         $(
           $field: map_decode_fn!($arg)(_r),
         )*
@@ -433,7 +434,7 @@ macro_rules! define_opcode {
           display_string = match stringify!($arg) {
             "StringIDUInt8" | "StringIDUInt16" | "StringIDUInt32" => format!("{} \"{}\"", display_string, _hermes.get_string_from_storage_by_index(self.$field as usize)),
             "FunctionIDUInt8" | "FunctionIDUInt16" | "FunctionIDUInt32" => {
-              let target_function = _hermes.function_headers[self.$field as usize].func_name;
+              let target_function = _hermes.function_headers[self.$field as usize].func_name();
               let func_str = _hermes
                   .get_string_from_storage_by_index(target_function as usize)
                   .to_string();
@@ -517,7 +518,7 @@ macro_rules! impl_instruction_parser {
           )*
         }
       }
-      
+
       fn is_jmp(&self) -> bool {
         match self {
           $(
@@ -553,11 +554,12 @@ macro_rules! build_instructions {
 
     impl Clone for Instruction {
       fn clone(&self) -> Self {
-        match self {
-          $(
-            Instruction::$instruction(insn) => Instruction::$instruction(insn.clone()),
-          )*
-        }
+        *self
+        // match self {
+        //   $(
+        //     Instruction::$instruction(insn) => Instruction::$instruction(insn.clone()),
+        //   )*
+        // }
       }
     }
 
@@ -571,6 +573,7 @@ macro_rules! build_instructions {
     }
 
     pub fn op_to_instr(op: u8) -> Instruction {
+      #[allow(clippy::needless_update)]
       match op {
         $(
           $opcode => Instruction::$instruction($instruction{op, ..Default::default()}),
@@ -700,7 +703,12 @@ impl Instruction {
 }
 
 pub trait Serializable {
-    fn deserialize<R>(r: &mut R) -> Self
+    type Version;
+
+    // deserialize from binary format into rust struct.
+    // Note: _version is passed as there's some differences in
+    // behavior depending on which version of hermes is used.
+    fn deserialize<R>(r: &mut R, _version: u32) -> Self
     where
         R: io::Read + io::BufRead + io::Seek;
 

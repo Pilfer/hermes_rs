@@ -1,8 +1,8 @@
 use std::io;
 
-use crate::hermes::Serializable;
 use crate::hermes::decode::decode_u32;
 use crate::hermes::encode::encode_u32;
+use crate::hermes::Serializable;
 
 #[derive(Debug)]
 pub struct RegExpTableEntry {
@@ -11,11 +11,12 @@ pub struct RegExpTableEntry {
 }
 
 impl Serializable for RegExpTableEntry {
+    type Version = u32;
     fn size(&self) -> usize {
         8
     }
 
-    fn deserialize<R>(r: &mut R) -> Self
+    fn deserialize<R>(r: &mut R, _version: u32) -> Self
     where
         R: io::Read + io::BufRead + io::Seek,
     {

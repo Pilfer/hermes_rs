@@ -1,8 +1,11 @@
-# hermes-rs  
+# hermes-rs
 
-A dependency-free disassembler and assembler for the Hermes bytecode, written in Rust.   
+Note: Still a WIP - A PR is always welcome.  
 
-A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging through the Hermes git repo, pulling all of the BytecodeDef files out, and tagging them. This made writing this tool much easier.  
+
+A dependency-free disassembler and assembler for the Hermes bytecode, written in Rust.
+
+A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging through the Hermes git repo, pulling all of the BytecodeDef files out, and tagging them. This made writing this tool much easier.
 
 - [hermes-rs](#hermes-rs)
     - [Supported HBC Versions](#supported-hbc-versions)
@@ -21,50 +24,45 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
     - [Supporting new versions of Hermes](#supporting-new-versions-of-hermes)
   - [TODO](#todo)
 
+### Supported HBC Versions
 
+| HBC Version | Disassembler | (Binary) Assembler | (Textual) Assembler | Decompiler |
+| ----------- | ------------ | ------------------ | ------------------- | ---------- |
+| 89          | ✅           | ✅                 | ❌                  | ❌         |
+| 90          | ✅           | ✅                 | ❌                  | ❌         |
+| 93          | ✅           | ✅                 | ❌                  | ❌         |
+| 94          | ✅           | ✅                 | ❌                  | ❌         |
+| 95          | ✅           | ✅                 | ❌                  | ❌         |
 
-### Supported HBC Versions    
+#### Project Goals
 
-| HBC Version | Disassembler | (Binary) Assembler | (Textual) Assembler | Decompiler |    
-|--|--|--|--|--|    
-| 89 | ✅ | ✅ | ❌ | ❌ |  
-| 90 | ✅ | ✅ | ❌ | ❌ |  
-| 93 | ✅ | ✅ | ❌ | ❌ |  
-| 94 | ✅ | ✅ | ❌ | ❌ |  
-| 95 | ✅ | ✅ | ❌ | ❌ |  
+- Full coverage for all public HBC versions
+- The ability to inject code stubs directly into the .hbc file for instrumentation
+- Textual HBC assembly
 
+##### Potential Use cases
 
+- Find which functions reference specific strings
+- Generate frida hooks for mobile implementations
+  - hermes loader -> hook loading the package -> feed to hermes-rs -> patch code
+    for bidirectional communication or even just logging
+- Writing fuzzers
 
-#### Project Goals  
+#### Features
 
-- Full coverage for all public HBC versions  
-- The ability to inject code stubs directly into the .hbc file for instrumentation  
-- Textual HBC assembly  
+- bLaZiNgLy FaSt
+- Export strings
+- Export bytecode
+- Encoding instructions piecemeal
+- Reduce binary size by [only enabling certain versions of HBC](#using-specific-hbc-versions)
 
-##### Potential Use cases   
-
-- Find which functions reference specific strings    
-- Generate frida hooks for mobile implementations   
-  - hermes loader -> hook loading the package -> feed to hermes-rs -> patch code  
-for bidirectional communication or even just logging  
-- Writing fuzzers  
-
-#### Features  
-- bLaZiNgLy FaSt  
-- Export strings  
-- Export bytecode  
-- Encoding instructions piecemeal  
-- Reduce binary size by [only enabling certain versions of HBC](#using-specific-hbc-versions)  
-
-
-## Installation  
+## Installation
 
 `cargo add hermes_rs`
 
+## Usage
 
-## Usage  
-
-#### Reading File Header  
+#### Reading File Header
 
 ```rust
 let f = File::open("./test_file.hbc").expect("no file found");
@@ -74,72 +72,72 @@ let header: HermesHeader = HermesStruct::deserialize(&mut reader);
 println!("Header: {:?}", header);
 ```
 
-Output:  
+Output:
 
 ```go
 {
-  magic: 2240826417119764422, 
-  version: 94, 
-  sha1: [ 13, 37, 133, 71, 337, 17, 182, 139, 155, 223, 133, 7, 132, 109, 21, 96, 3, 12, 19, 56], 
-  file_length: 1102, 
-  global_code_index: 0, 
-  function_count: 3, 
-  string_kind_count: 2, 
-  identifier_count: 5, 
-  string_count: 14, 
-  overflow_string_count: 0, 
-  string_storage_size: 88, 
-  big_int_count: 0, 
-  big_int_storage_size: 0, 
-  reg_exp_count: 0, 
-  reg_exp_storage_size: 0, 
-  array_buffer_size: 0, 
-  obj_key_buffer_size: 0, 
-  obj_value_buffer_size: 0, 
-  segment_id: 0, 
-  cjs_module_count: 0, 
-  function_source_count: 0, 
-  debug_info_offset: 628, 
-  options: BytecodeOptions { 
-    static_builtins: false, 
-    cjs_modules_statically_resolved: false, 
-    has_async: false, 
+  magic: 2240826417119764422,
+  version: 94,
+  sha1: [ 13, 37, 133, 71, 337, 17, 182, 139, 155, 223, 133, 7, 132, 109, 21, 96, 3, 12, 19, 56],
+  file_length: 1102,
+  global_code_index: 0,
+  function_count: 3,
+  string_kind_count: 2,
+  identifier_count: 5,
+  string_count: 14,
+  overflow_string_count: 0,
+  string_storage_size: 88,
+  big_int_count: 0,
+  big_int_storage_size: 0,
+  reg_exp_count: 0,
+  reg_exp_storage_size: 0,
+  array_buffer_size: 0,
+  obj_key_buffer_size: 0,
+  obj_value_buffer_size: 0,
+  segment_id: 0,
+  cjs_module_count: 0,
+  function_source_count: 0,
+  debug_info_offset: 628,
+  options: BytecodeOptions {
+    static_builtins: false,
+    cjs_modules_statically_resolved: false,
+    has_async: false,
     flags: false
   },
   function_headers: [
-    SmallFunctionHeader { 
-      offset: 348, 
-      param_count: 1, 
-      byte_size: 69, 
-      func_name: 5, 
-      info_offset: 576, 
+    SmallFunctionHeader {
+      offset: 348,
+      param_count: 1,
+      byte_size: 69,
+      func_name: 5,
+      info_offset: 576,
       frame_size: 15,
       env_size: 2,
       highest_read_cache_index: 2,
       highest_write_cache_index: 0,
       flags: FunctionHeaderFlag {
-        prohibit_invoke: ProhibitNone, 
-        strict_mode: false, 
-        has_exception_handler: true, 
+        prohibit_invoke: ProhibitNone,
+        strict_mode: false,
+        has_exception_handler: true,
         has_debug_info: true, overflowed: false
         }
-    }, 
+    },
     // ...
-  ], 
+  ],
   string_kinds: [
-    StringKindEntry { count: 9, kind: String }, 
+    StringKindEntry { count: 9, kind: String },
     StringKindEntry { count: 5, kind: Identifier }
   ],
   string_storage: [
-    SmallStringTableEntry { is_utf_16: false, offset: 0, length: 4}, 
+    SmallStringTableEntry { is_utf_16: false, offset: 0, length: 4},
     // ...
   ],
-  string_storage_bytes: [ 119, 101, 101, ... ], 
+  string_storage_bytes: [ 119, 101, 101, ... ],
   overflow_string_storage: []
 }
 ```
 
-#### Reading Function Headers  
+#### Reading Function Headers
 
 ```rust
 header.function_headers.iter().for_each(|fh| {
@@ -151,12 +149,12 @@ header.function_headers.iter().for_each(|fh| {
 // ...
 ```
 
-#### Parsing Bytecode  
+#### Parsing Bytecode
 
 ```rust
 header.parse_bytecode(&mut reader);
 
-// By default, prints the following. It is assumed that the end user will 
+// By default, prints the following. It is assumed that the end user will
 // bring their own functionality to play with the instructions as-needed
 
 /*
@@ -164,15 +162,14 @@ Function<foo>(1 params, 1 registers, 0 symbols):
   LoadConstString  r0,  "bar"
   AsyncBreakCheck
   Ret  r0
-*/        
+*/
 ```
 
-
-#### Encoding Instructions  
+#### Encoding Instructions
 
 Encoding instructions is trivial - each `Instruction` implements a trait with `deserialize` and `serialize` methods.
 
-You can alias the imports for your version to shorten the code, but fully-expanded it may look something like this:  
+You can alias the imports for your version to shorten the code, but fully-expanded it may look something like this:
 
 ```rust
 let load_const_string = hermes::v94::Instruction::LoadConstString(hermes::v94::LoadConstString {
@@ -201,43 +198,41 @@ for instr in instructions {
 assert!(writer == vec![115, 0, 2, 0, 98, 92, 0], "Bytecode is incorrect!");
 ```
 
-#### Using specific HBC Versions  
+#### Using specific HBC Versions
 
-Want to use a specific version of the Hermes bytecode and reduce your binary size?  
+Want to use a specific version of the Hermes bytecode and reduce your binary size?
 
-In Cargo.toml, find the `hermes_rs` dependency and select which HBC version(s) you'd like to use in your application.  
+In Cargo.toml, find the `hermes_rs` dependency and select which HBC version(s) you'd like to use in your application.
 
-Example:  
+Example:
+
 ```toml
 [dependencies]
 hermes_rs = { features = ["v89", "v90", "v93", "v94", "v95"] }
 ```
 
-# Hermes Resources    
+# Hermes Resources
 
-I leaned heavily on the following projects and resources to develop this package.  
+I leaned heavily on the following projects and resources to develop this package.
 
-- **Official docs**: https://hermesengine.dev/  
-  - Source: https://github.com/facebook/hermes  
-- **hermes-dec** disassembler/decompiler:  
-  - https://github.com/P1sec/hermes-dec  
-  - Opcode Docs: https://p1sec.github.io/hermes-dec/opcodes_table.html  
-- **hbctool**: https://github.com/bongtrop/hbctool  
-- **hasmer** (stale): https://github.com/lucasbaizer2/hasmer  
+- **Official docs**: https://hermesengine.dev/
+  - Source: https://github.com/facebook/hermes
+- **hermes-dec** disassembler/decompiler:
+  - https://github.com/P1sec/hermes-dec
+  - Opcode Docs: https://p1sec.github.io/hermes-dec/opcodes_table.html
+- **hbctool**: https://github.com/bongtrop/hbctool
+- **hasmer** (stale): https://github.com/lucasbaizer2/hasmer
 
+---
 
+# Development
 
---- 
+### Supporting new versions of Hermes
 
-# Development  
-
-
-### Supporting new versions of Hermes  
-
-There is a script in `./def_versions/_gen_macros.js` that reads and parses a Bytecode Definition file passed to it as the first argument and outputs a file containing the macro body to support the updated instructions.  
+There is a script in `./def_versions/_gen_macros.js` that reads and parses a Bytecode Definition file passed to it as the first argument and outputs a file containing the macro body to support the updated instructions.
 
 ```sh
-# How I generated them  
+# How I generated them
 
 cd ./def_versions
 
@@ -248,27 +243,32 @@ node _gen_macros.js 94.def > ../src/hermes/v94/mod.rs
 node _gen_macros.js 95.def > ../src/hermes/v95/mod.rs
 ```
 
-Example with a hypothetical `v100` version : 
+Example with a hypothetical `v100` version :
 
 ```sh
 node _gen_macros.js v100.def
 ```
 
-Which outputs:  
+Which outputs:
 
 ```rust
 use crate::hermes;
 
 build_instructions!(
-  ... instructions here
+  (0, Unreachable, ),
+  (1, NewObjectWithBuffer, r0: Reg8, p0: UInt16, p1: UInt16, p2: UInt16, p3: UInt16),
+  (2, NewObjectWithBufferLong, r0: Reg8, p0: UInt16, p1: UInt16, p2: UInt32, p3: UInt32),
+  (3, NewObject, r0: Reg8),
+  (4, NewObjectWithParent, r0: Reg8, r1: Reg8),
+  ... other instructions here
 );
 ```
 
-From here, you'll add a new directory and `mod.rs` file for this version (`./src/hermes/v100/mod.rs`) and paste the output from the script into it.  
+From here, you'll add a new directory and `mod.rs` file for this version (`./src/hermes/v100/mod.rs`) and paste the output from the script into it.
 
 This could (and probably should) be a `build.rs` process.
 
-After creating this file, open up `./src/hermes/mod.rs` and navigate to the Instruction module imports and add the import, then populate the Instruction enum + trait + other functions' match statements with the new version. You'll likely need to rely on the compiler to complain about missing match branches - there's only a few, though.    
+After creating this file, open up `./src/hermes/mod.rs` and navigate to the Instruction module imports and add the import, then populate the Instruction enum + trait + other functions' match statements with the new version. You'll likely need to rely on the compiler to complain about missing match branches - there's only a few, though.
 
 As this codebase evolves, you may need add branch arms in different matches.
 
@@ -327,39 +327,43 @@ let ins_obj: Option<Instruction> = match self.version {
 
 Finally, add the `feature` (`v100 = []`) to Cargo.toml.
 
----  
+---
 
-## TODO  
+## TODO
 
-- [X] Break header structs out into their own files  
+- [x] Break header structs out into their own files  
 - [ ] Add correct logic for FunctionHeader/SmallFunctionHeader  
-- [X] Exception definition stuff  
+  - Currently only the SmallFunctionHeader is supported - need to generate HBC 
+  - This is preventing Android binaries from being decompiled properly  
+that actually uses the regular FunctionHeader  
+- [x] Exception definition stuff  
   - Code quality for this is pretty bad - should probably go back over it later  
 - [ ] DebugInfo definition stuff  
 - [ ] Add comments  
-- [ ] Docs  
-- [ ] `Serializer` implementations    
+- [ ] Add docs  
+- [ ] `Serializer` implementations  
 
-| Struct | Deserialize | Serialize | Size |  
-|--|--|--|--|  
-| HermesHeader | ✅ | ❌ | ❌ |  
-| SmallFunctionHeader | ✅ | ❌ | ❌ |  
-| StringKindEntry | ✅ | ✅ | ✅ |  
-| SmallStringTableEntry | ✅ | ✅ | ✅ |  
-| OverflowStringTableEntry | ✅ | ✅ | ✅ | 
-| BigIntTableEntry | ✅ | ❌ | ❌ |  
-| BytecodeOptions | ✅ | ✅ | ✅ |  
-| DebugInfoOffsets | ✅ | ✅ | ✅ |  
-| DebugInfoHeader | ✅ | ✅ | ✅ |  
-| DebugFileRegion | ✅ | ✅ | ✅ |  
-| ExceptionHandlerInfo | ✅ | ✅ | ✅ |  
-| RegExpTableEntry | ✅ | ❌ | ❌ |  
-| FunctionHeaderFlag | ✅ | ❌ | ❌ |  
+| Struct                   | Deserialize | Serialize | Size |
+| ------------------------ | ----------- | --------- | ---- |
+| HermesHeader             | ✅          | ❌        | ❌   |
+| SmallFunctionHeader      | ✅          | ❌        | ❌   |
+| FunctionHeader           | ❌          | ❌        | ❌   |
+| StringKindEntry          | ✅          | ✅        | ✅   |
+| SmallStringTableEntry    | ✅          | ✅        | ✅   |
+| OverflowStringTableEntry | ✅          | ✅        | ✅   |
+| BigIntTableEntry         | ✅          | ❌        | ❌   |
+| BytecodeOptions          | ✅          | ✅        | ✅   |
+| DebugInfoOffsets         | ✅          | ✅        | ✅   |
+| DebugInfoHeader          | ✅          | ✅        | ✅   |
+| DebugFileRegion          | ✅          | ✅        | ✅   |
+| ExceptionHandlerInfo     | ✅          | ✅        | ✅   |
+| RegExpTableEntry         | ✅          | ✅        | ✅   |
+| FunctionHeaderFlag       | ✅          | ❌        | ❌   |
 
 - [ ] Parse in the correct order:
 
 ```cpp
-// From official Hermes source code  
+// From official Hermes source code
 void visitBytecodeSegmentsInOrder(Visitor &visitor) {
   visitor.visitFunctionHeaders();
   visitor.visitStringKinds();

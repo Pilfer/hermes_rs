@@ -1,8 +1,8 @@
 use std::io;
 
-use crate::hermes::Serializable;
 use crate::hermes::decode::{decode_u32, read_bitfield};
-use crate::hermes::encode::{encode_u8, encode_u32, write_bitfield};
+use crate::hermes::encode::{encode_u32, encode_u8, write_bitfield};
+use crate::hermes::Serializable;
 
 #[derive(Debug)]
 pub struct SmallStringTableEntry {
@@ -12,12 +12,13 @@ pub struct SmallStringTableEntry {
 }
 
 impl Serializable for SmallStringTableEntry {
+    type Version = u32;
     /// The size of a SmallStringTableEntry is 4 bytes, bitfields are used to store the data.
     fn size(&self) -> usize {
         4
     }
 
-    fn deserialize<R>(r: &mut R) -> Self
+    fn deserialize<R>(r: &mut R, _version: u32) -> Self
     where
         R: io::Read + io::BufRead + io::Seek,
     {
@@ -30,8 +31,8 @@ impl Serializable for SmallStringTableEntry {
 
         SmallStringTableEntry {
             is_utf_16: is_utf_16 == 1,
-            offset: offset,
-            length: length,
+            offset,
+            length,
         }
     }
 
@@ -61,11 +62,12 @@ pub struct OverflowStringTableEntry {
 }
 
 impl Serializable for OverflowStringTableEntry {
+    type Version = u32;
     fn size(&self) -> usize {
         8
     }
 
-    fn deserialize<R>(r: &mut R) -> Self
+    fn deserialize<R>(r: &mut R, _version: u32) -> Self
     where
         R: io::Read + io::BufRead + io::Seek,
     {

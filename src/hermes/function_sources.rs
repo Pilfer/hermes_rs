@@ -5,12 +5,12 @@ use crate::hermes::encode::encode_u32;
 use crate::hermes::Serializable;
 
 #[derive(Debug)]
-pub struct BigIntTableEntry {
-    pub offset: u32,
-    pub length: u32,
+pub struct FunctionSourceEntry {
+    pub function_id: u32,
+    pub string_id: u32,
 }
 
-impl Serializable for BigIntTableEntry {
+impl Serializable for FunctionSourceEntry {
     type Version = u32;
     fn size(&self) -> usize {
         8
@@ -20,16 +20,19 @@ impl Serializable for BigIntTableEntry {
     where
         R: io::Read + io::BufRead + io::Seek,
     {
-        let offset = decode_u32(r);
-        let length = decode_u32(r);
-        BigIntTableEntry { offset, length }
+        let function_id = decode_u32(r);
+        let string_id = decode_u32(r);
+        FunctionSourceEntry {
+            function_id,
+            string_id,
+        }
     }
 
     fn serialize<W>(&self, w: &mut W)
     where
         W: io::Write,
     {
-        encode_u32(w, self.offset);
-        encode_u32(w, self.length);
+        encode_u32(w, self.function_id);
+        encode_u32(w, self.string_id);
     }
 }

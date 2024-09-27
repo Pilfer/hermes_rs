@@ -1,8 +1,8 @@
 use std::io;
 
-use crate::hermes::Serializable;
 use crate::hermes::decode::decode_u8;
 use crate::hermes::encode::encode_u8;
+use crate::hermes::Serializable;
 
 #[derive(Debug)]
 pub struct BytecodeOptions {
@@ -13,12 +13,13 @@ pub struct BytecodeOptions {
 }
 
 impl Serializable for BytecodeOptions {
+    type Version = u32;
     /// The size of a BytecodeOptions is 1 byte.  Bitfields are used to store the data.
     fn size(&self) -> usize {
         1
     }
 
-    fn deserialize<R>(r: &mut R) -> Self
+    fn deserialize<R>(r: &mut R, _version: u32) -> Self
     where
         R: io::Read + io::BufRead + io::Seek,
     {
@@ -29,10 +30,10 @@ impl Serializable for BytecodeOptions {
         let flags: bool = bytecode_options_byte >> 1 & 1 == 1;
 
         BytecodeOptions {
-            static_builtins: static_builtins,
-            cjs_modules_statically_resolved: cjs_modules_statically_resolved,
-            has_async: has_async,
-            flags: flags,
+            static_builtins,
+            cjs_modules_statically_resolved,
+            has_async,
+            flags,
         }
     }
 
@@ -53,7 +54,7 @@ impl Serializable for BytecodeOptions {
         if self.flags {
             bytecode_options_byte |= 1 << 1;
         }
-        
+
         encode_u8(w, bytecode_options_byte);
     }
 }

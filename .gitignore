@@ -4,3 +4,5 @@
 **/**/*.hbc
 **/**/index.android.bundle
 junk
+.notes.md
+input_data

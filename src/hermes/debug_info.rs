@@ -1,10 +1,10 @@
 use std::io;
 
-use crate::hermes::Serializable;
 use crate::hermes::decode::decode_u32;
 use crate::hermes::encode::encode_u32;
+use crate::hermes::Serializable;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DebugInfoOffsets {
     pub src: u32,
     pub scope_desc: u32,
@@ -12,11 +12,12 @@ pub struct DebugInfoOffsets {
 }
 
 impl Serializable for DebugInfoOffsets {
+    type Version = u32;
     fn size(&self) -> usize {
         12
     }
 
-    fn deserialize<R>(r: &mut R) -> Self
+    fn deserialize<R>(r: &mut R, _version: u32) -> Self
     where
         R: io::Read + io::BufRead + io::Seek,
     {
@@ -47,11 +48,12 @@ pub struct DebugInfoHeader {
 }
 
 impl Serializable for DebugInfoHeader {
+    type Version = u32;
     fn size(&self) -> usize {
         28
     }
 
-    fn deserialize<R>(r: &mut R) -> Self
+    fn deserialize<R>(r: &mut R, _version: u32) -> Self
     where
         R: io::Read + io::BufRead + io::Seek,
     {
@@ -89,18 +91,19 @@ pub struct DebugFileRegion {
 }
 
 impl Serializable for DebugFileRegion {
+    type Version = u32;
     fn size(&self) -> usize {
         12
     }
 
-    fn deserialize<R>(r: &mut R) -> Self
+    fn deserialize<R>(r: &mut R, _version: u32) -> Self
     where
         R: io::Read + io::BufRead + io::Seek,
     {
         DebugFileRegion {
             from_address: decode_u32(r),
             filename_id: decode_u32(r),
-            source_mapping_url_id: decode_u32(r)
+            source_mapping_url_id: decode_u32(r),
         }
     }
 
