@@ -178,37 +178,48 @@ impl HermesStruct for HermesHeader {
                 function_header_val = FunctionHeader::Large(fh);
             }
 
-            let fhv = function_header_val.clone();
+            let mut fhv = function_header_val.clone();
 
             function_headers.push(function_header_val);
 
             // Read the ExceptionInfo
             if fhv.flags().has_exception_handler {
-                // align_reader(r, 4).unwrap();
                 let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
                 let exc_headers_count = decode_u32(r);
-                println!("Exception headers count: {:?}", exc_headers_count);
-                for _ in 0..fhv.exception_handlers().len() {
+                for _ in 0..exc_headers_count {
                     exception_handlers.push(ExceptionHandlerInfo::deserialize(r, version));
                 }
-                println!("Exception handlers: {:?}", exception_handlers);
+
+                match fhv {
+                    FunctionHeader::Small(ref mut sfh) => {
+                        sfh.exception_handlers = exception_handlers;
+                    }
+                    FunctionHeader::Large(ref mut lfh) => {
+                        lfh.exception_handlers = exception_handlers;
+                    }
+                }
             }
 
             if fhv.flags().has_debug_info {
-                // align_reader(r, 4).unwrap();
                 let debug_info = DebugInfoOffsets::deserialize(r, version);
-                println!("Debug info: {:?}", debug_info);
+                match fhv {
+                    FunctionHeader::Small(ref mut sfh) => {
+                        sfh.debug_info = debug_info;
+                    }
+                    FunctionHeader::Large(ref mut lfh) => {
+                        lfh.debug_info = debug_info;
+                    }
+                }
             }
 
             r.seek(io::SeekFrom::Start(_current_pos as u64))
                 .expect("unable to seek to function header");
-        }
+        } // End of function headers
 
         // Read string kinds
         let mut string_kinds: Vec<StringKindEntry> = vec![];
         for _string_kind_idx in 0..string_kind_count {
             let string_kind = StringKindEntry::deserialize(r, version);
-
             string_kinds.push(string_kind);
         }
 
@@ -225,74 +236,65 @@ impl HermesStruct for HermesHeader {
             string_storage.push(string_item);
         }
 
+        // Read overflow string table entries
         let mut overflow_string_storage: Vec<OverflowStringTableEntry> = vec![];
         for _ in 0..overflow_string_count {
             overflow_string_storage.push(OverflowStringTableEntry::deserialize(r, version));
         }
 
+        // Read string storage bytes
         let mut string_storage_bytes_real = vec![0u8; string_storage_size as usize];
         r.read_exact(&mut string_storage_bytes_real)
             .expect("unable to read string storage");
 
+        // Read array buffer storage
         let mut array_buffer_storage = vec![0u8; array_buffer_size as usize];
         r.read_exact(&mut array_buffer_storage)
             .expect("unable to read array buffer storage");
 
+        // Read object key buffer
         let mut object_key_buffer = vec![0u8; obj_key_buffer_size as usize];
         r.read_exact(&mut object_key_buffer)
             .expect("unable to read object key buffer storage");
 
+        // Read object value buffer
         let mut object_val_buffer = vec![0u8; obj_value_buffer_size as usize];
         r.read_exact(&mut object_val_buffer)
             .expect("unable to read object value buffer storage");
 
-        // align_reader(r, 4).unwrap();
-
+        // Read big int table
         let mut big_int_table = vec![];
         if big_int_count > 0 && version >= 87 {
             for _ in 0..big_int_count {
-                println!("big_int_count: {:?}", big_int_count);
                 big_int_table.push(BigIntTableEntry::deserialize(r, version));
             }
-            println!("\nbig_int_table: {:?}\n", big_int_table);
         }
 
-        // Align to 4 bytes
-        // align_reader(r, 4).unwrap();
-
-        // let mut regexp_table_buf = vec![0u8; reg_exp_storage_size as usize];
-        // r.read_exact(&mut regexp_table_buf)
-        // .expect("unable to read regexp table");
+        // Read regexp table
         let mut reg_exp_table = vec![];
         if reg_exp_count > 0 {
             for _ in 0..reg_exp_count {
                 reg_exp_table.push(RegExpTableEntry::deserialize(r, version));
             }
-            println!("\nreg_exp_table: {:?}\n", reg_exp_table);
-
-            // Align again
-            // align_reader(r, 4).unwrap();
 
             // Read the regexp storage buffer
-            // TODO: make parser for this
-            // visitor.visitRegExpStorage();
+            // TODO: make parser for this. The RegExp stuff has a bespoke bytecode as well.
+            // I'm not sure how useful it'd be for people to be able to dig through this, but for the sake
+            // of completeness, it should be done.
             let mut reg_exp_storage = vec![0u8; reg_exp_storage_size as usize];
             r.read_exact(&mut reg_exp_storage)
                 .expect("unable to read regexp storage");
         }
 
-        // visitor.visitCJSModuleTable();
+        // Read CJS modules
         let mut cjs_modules: Vec<CJSModule> = vec![];
         if cjs_module_count > 0 {
-            // align_reader(r, 4).unwrap();
             if options.cjs_modules_statically_resolved && version < 77 {
-                // read 4 bytes per cjs module count
                 for _ in 0..cjs_module_count {
                     let cjs_module = CJSModuleInt::deserialize(r, version);
                     cjs_modules.push(CJSModule::CJSModuleInt(cjs_module));
                 }
             } else {
-                // get a pair reader - symbol_id and offset, u32
                 for _ in 0..cjs_module_count {
                     let cjs_module = CJSModuleEntry::deserialize(r, version);
                     cjs_modules.push(CJSModule::CJSModuleEntry(cjs_module));
@@ -300,21 +302,13 @@ impl HermesStruct for HermesHeader {
             }
         }
 
-        // visitor.visitFunctionSourceTable();
         let mut function_source_entries: Vec<FunctionSourceEntry> = vec![];
         if function_source_count > 0 {
-            // align_reader(r, 4).unwrap();
             for _ in 0..function_source_count {
                 function_source_entries.push(FunctionSourceEntry::deserialize(r, version));
             }
         }
 
-        println!("function_source_entries: {:?}", function_source_entries);
-
-        // TODO: Add debug info stuff
-
-        // https://github.com/facebook/hermes/blob/main/lib/BCGen/HBC/DebugInfo.cpp#L181
-        println!("Hermes version: {:?}", version);
         Self {
             magic,
             version,

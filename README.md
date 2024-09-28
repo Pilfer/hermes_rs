@@ -330,24 +330,16 @@ Finally, add the `feature` (`v100 = []`) to Cargo.toml.
 ---
 
 ## TODO
-
-- [x] Break header structs out into their own files  
-- [ ] Add correct logic for FunctionHeader/SmallFunctionHeader  
-  - Currently only the SmallFunctionHeader is supported - need to generate HBC 
-  - This is preventing Android binaries from being decompiled properly  
-that actually uses the regular FunctionHeader  
-- [x] Exception definition stuff  
-  - Code quality for this is pretty bad - should probably go back over it later  
 - [ ] DebugInfo definition stuff  
 - [ ] Add comments  
 - [ ] Add docs  
-- [ ] `Serializer` implementations  
+- [ ] `Serializer` implementations for everything    
 
 | Struct                   | Deserialize | Serialize | Size |
 | ------------------------ | ----------- | --------- | ---- |
 | HermesHeader             | ✅          | ❌        | ❌   |
 | SmallFunctionHeader      | ✅          | ❌        | ❌   |
-| FunctionHeader           | ❌          | ❌        | ❌   |
+| FunctionHeader           | ✅          | ✅        | ✅   |
 | StringKindEntry          | ✅          | ✅        | ✅   |
 | SmallStringTableEntry    | ✅          | ✅        | ✅   |
 | OverflowStringTableEntry | ✅          | ✅        | ✅   |
@@ -360,7 +352,7 @@ that actually uses the regular FunctionHeader
 | RegExpTableEntry         | ✅          | ✅        | ✅   |
 | FunctionHeaderFlag       | ✅          | ❌        | ❌   |
 
-- [ ] Parse in the correct order:
+- [x] Parse in the correct order:
 
 ```cpp
 // From official Hermes source code

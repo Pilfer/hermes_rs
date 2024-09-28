@@ -132,15 +132,7 @@ where
     Ok(pos)
 }
 
-/*
-        let _current_pos = r.seek(io::SeekFrom::Current(0)).unwrap();
-        let align = 4 - (_current_pos % 4);
-        if align != 4 {
-            r.seek(io::SeekFrom::Current(align as i64))
-                .expect("unable to align to 4 bytes");
-        }
-*/
-
+#[allow(dead_code)]
 pub(crate) fn align_reader<R>(r: &mut R, num_bytes: u64) -> io::Result<u64>
 where
     R: io::Read + io::Seek,
