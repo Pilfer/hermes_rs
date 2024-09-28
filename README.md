@@ -33,6 +33,7 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
 | 93          | ✅           | ✅                 | ❌                  | ❌         |
 | 94          | ✅           | ✅                 | ❌                  | ❌         |
 | 95          | ✅           | ✅                 | ❌                  | ❌         |
+| 96          | ✅           | ✅                 | ❌                  | ❌         |
 
 #### Project Goals
 
