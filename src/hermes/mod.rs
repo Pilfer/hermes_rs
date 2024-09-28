@@ -625,6 +625,10 @@ pub mod v94;
 #[cfg(feature = "v95")]
 pub mod v95;
 
+#[macro_use]
+#[cfg(feature = "v96")]
+pub mod v96;
+
 #[derive(Debug, Clone)]
 pub enum Instruction {
     #[cfg(feature = "v89")]
@@ -637,6 +641,8 @@ pub enum Instruction {
     V94(v94::Instruction),
     #[cfg(feature = "v95")]
     V95(v95::Instruction),
+    #[cfg(feature = "v96")]
+    V96(v96::Instruction),
 }
 
 impl Instruction {
@@ -653,6 +659,8 @@ impl Instruction {
             Instruction::V94(instruction) => instruction.display(_hermes),
             #[cfg(feature = "v95")]
             Instruction::V95(instruction) => instruction.display(_hermes),
+            #[cfg(feature = "v96")]
+            Instruction::V96(instruction) => instruction.display(_hermes),
         }
     }
 
@@ -668,6 +676,8 @@ impl Instruction {
             Instruction::V94(instruction) => instruction.is_jmp(),
             #[cfg(feature = "v95")]
             Instruction::V95(instruction) => instruction.is_jmp(),
+            #[cfg(feature = "v96")]
+            Instruction::V96(instruction) => instruction.is_jmp(),
         }
     }
 
@@ -683,6 +693,8 @@ impl Instruction {
             Instruction::V94(instruction) => instruction.get_address_field(),
             #[cfg(feature = "v95")]
             Instruction::V95(instruction) => instruction.get_address_field(),
+            #[cfg(feature = "v96")]
+            Instruction::V96(instruction) => instruction.get_address_field(),
         }
     }
 
@@ -698,6 +710,8 @@ impl Instruction {
             Instruction::V94(instruction) => instruction.size(),
             #[cfg(feature = "v95")]
             Instruction::V95(instruction) => instruction.size(),
+            #[cfg(feature = "v96")]
+            Instruction::V96(instruction) => instruction.size(),
         }
     }
 }
