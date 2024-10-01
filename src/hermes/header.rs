@@ -104,6 +104,10 @@ pub trait HermesStruct {
     fn parse_bytecode<R>(&self, r: &mut R)
     where
         R: io::Read + io::BufRead + io::Seek;
+
+    fn parse_bytecode_for_fn<R: io::Read + io::BufRead + io::Seek>(&self, idx: u32, r: &mut R)
+    where
+        R: io::Read + io::BufRead + io::Seek;
 }
 
 impl HermesStruct for HermesHeader {
@@ -165,7 +169,9 @@ impl HermesStruct for HermesHeader {
             let function_header_val: FunctionHeader;
 
             if !sfh.flags.overflowed {
-                function_header_val = FunctionHeader::Small(sfh);
+                function_header_val = FunctionHeader::Small(sfh.clone());
+                r.seek(io::SeekFrom::Start(sfh.info_offset as u64))
+                    .expect("unable to seek to function header");
             } else {
                 let new_offset = sfh.info_offset << 16 | sfh.offset;
 
@@ -350,10 +356,144 @@ impl HermesStruct for HermesHeader {
         }
     }
 
+    fn parse_bytecode_for_fn<R: io::Read + io::BufRead + io::Seek>(&self, idx: u32, r: &mut R) {
+        let fh = &self.function_headers.get(idx as usize).unwrap();
+        r.seek(io::SeekFrom::Start(fh.offset() as u64)).unwrap();
+        let mut bytecode_buf = vec![0u8; fh.byte_size() as usize];
+        r.read_exact(&mut bytecode_buf)
+            .expect("unable to read first functions bytecode");
+
+        let myfunc = self.string_storage.get(fh.func_name() as usize).unwrap();
+        println!("------------------------------------------------");
+        let func_start = myfunc.offset;
+        let mut func_name = String::from_utf8(
+            self.string_storage_bytes[func_start as usize..(func_start + myfunc.length) as usize]
+                .to_vec(),
+        )
+        .unwrap();
+
+        if func_name.is_empty() {
+            func_name = format!("$FUNC_{}", idx);
+        }
+
+        println!(
+            "Function<{}>({:?} params, {:?} registers, {:?} symbols):",
+            func_name,
+            fh.param_count(),
+            fh.frame_size(),
+            fh.env_size()
+        );
+
+        // println!("bytecode as hex: {:?}", bytecode_buf);
+
+        // #[allow(unused_mut)]
+        let mut instructions_list = vec![];
+
+        let mut byte_iter = bytecode_buf.iter();
+        let mut index = 0;
+        let mut byte_index = 0;
+
+        let mut labels: HashMap<u32, u32> = HashMap::new();
+
+        // Iterate over bytecode_buf and parse the instructions
+        while let Some(&op_byte) = byte_iter.next() {
+            let op = op_byte;
+            // Make a new Cursor to print the remaining bytes
+            let mut r_cursor = io::Cursor::new(byte_iter.as_slice());
+
+            // Deserialize the instruction
+            let ins_obj: Option<Instruction> = match self.version {
+                #[cfg(feature = "v89")]
+                89 => Some(Instruction::V89(
+                    crate::hermes::v89::Instruction::deserialize(&mut r_cursor, op),
+                )),
+                #[cfg(feature = "v90")]
+                90 => Some(Instruction::V90(
+                    crate::hermes::v90::Instruction::deserialize(&mut r_cursor, op),
+                )),
+                #[cfg(feature = "v93")]
+                93 => Some(Instruction::V93(
+                    crate::hermes::v93::Instruction::deserialize(&mut r_cursor, op),
+                )),
+                #[cfg(feature = "v94")]
+                94 => Some(Instruction::V94(
+                    crate::hermes::v94::Instruction::deserialize(&mut r_cursor, op),
+                )),
+                #[cfg(feature = "v95")]
+                95 => Some(Instruction::V95(
+                    crate::hermes::v95::Instruction::deserialize(&mut r_cursor, op),
+                )),
+                _ => {
+                    panic!("Unsupported HBC version: {:?}. Check Cargo.toml features to see if this HBC version is enabled.", self.version);
+                    // None
+                }
+            };
+
+            // let ins: Instruction = ins_obj.unwrap();
+            if let Some(ins) = ins_obj {
+                // This label code may be the worst code I've ever written
+                let mut label_idx = 0;
+
+                // Exception handler logic here
+                if fh.flags().has_exception_handler {
+                    for (idx, eh) in fh.exception_handlers().iter().enumerate() {
+                        let ehidx = idx + 1;
+                        let has_label = if index == eh.start as usize {
+                            label_idx += ehidx + 1;
+                            true
+                        } else if index == eh.end as usize {
+                            label_idx += ehidx + 2;
+                            true
+                        } else if index == eh.target as usize {
+                            label_idx += ehidx;
+                            true
+                        } else {
+                            false
+                        };
+
+                        if has_label {
+                            println!("    L{}:", label_idx);
+                        }
+                    }
+                }
+
+                // Check if the instruction is a jump target
+                let mut display_str = ins.display(self);
+                if ins.is_jmp() {
+                    let addy = ins.get_address_field();
+                    label_idx += 1;
+                    labels.insert(addy, label_idx as u32);
+
+                    let from = format!("{}", addy).to_string();
+                    let to = format!("L{}", label_idx).to_string();
+                    display_str = display_str.replace(&from, &to);
+                }
+
+                if labels.get(&byte_index).is_some() {
+                    println!("          \tL{}:", labels.get(&byte_index).unwrap());
+                }
+
+                // build_instructions
+                println!("{:#010X}\t{}", byte_index, display_str);
+                let size = ins.size();
+                instructions_list.push(ins);
+
+                index += size + 1;
+                byte_index += 1;
+
+                for _ in 0..size {
+                    if byte_iter.next().is_none() {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     fn parse_bytecode<R: io::Read + io::BufRead + io::Seek>(&self, r: &mut R) {
         // Function body goes here
         {
-            for fh in &self.function_headers {
+            for (fidx, fh) in self.function_headers.iter().enumerate() {
                 r.seek(io::SeekFrom::Start(fh.offset() as u64)).unwrap();
                 let mut bytecode_buf = vec![0u8; fh.byte_size() as usize];
                 r.read_exact(&mut bytecode_buf)
@@ -362,12 +502,16 @@ impl HermesStruct for HermesHeader {
                 let myfunc = self.string_storage.get(fh.func_name() as usize).unwrap();
                 println!("------------------------------------------------");
                 let func_start = myfunc.offset;
-                let func_name = String::from_utf8(
+                let mut func_name = String::from_utf8(
                     self.string_storage_bytes
                         [func_start as usize..(func_start + myfunc.length) as usize]
                         .to_vec(),
                 )
                 .unwrap();
+
+                if func_name.is_empty() {
+                    func_name = format!("$FUNC_{}", fidx);
+                }
 
                 println!(
                     "Function<{}>({:?} params, {:?} registers, {:?} symbols):",
@@ -460,22 +604,20 @@ impl HermesStruct for HermesHeader {
                             let from = format!("{}", addy).to_string();
                             let to = format!("L{}", label_idx).to_string();
                             display_str = display_str.replace(&from, &to);
-                            // I want to get the struct members of `ins` here.
-                            // println!("==========={}: {} // {}", byte_index, display_str, addy);
                         }
 
                         if labels.get(&byte_index).is_some() {
                             println!("    L{}:", labels.get(&byte_index).unwrap());
                         }
-                        // build_instructions
 
+                        // build_instructions
                         println!("{}\t{}", byte_index, display_str);
                         let size = ins.size();
                         instructions_list.push(ins);
-                        // println!("--------- index is {}", index);
-                        // println!("--------- byte_index is {}", byte_index);
+
                         index += size + 1;
                         byte_index += 1;
+
                         for _ in 0..size {
                             if byte_iter.next().is_none() {
                                 break;
