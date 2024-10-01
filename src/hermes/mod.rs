@@ -438,7 +438,13 @@ macro_rules! define_opcode {
               let func_str = _hermes
                   .get_string_from_storage_by_index(target_function as usize)
                   .to_string();
-              format!("{} Function<{}>", display_string, func_str)
+
+              // functions don't always have names, so in that case we'll return the function index
+              if func_str.is_empty() {
+                  format!("{} Function<$FUNC_{}>", display_string, self.$field)
+              } else {
+                  format!("{} Function<{}>", display_string, func_str)
+              }
             },
             "BigIntIDUInt16" | "BigIntIDUInt32" => {
               // TODO: Make this work

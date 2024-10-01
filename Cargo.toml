@@ -1,8 +1,10 @@
 [package]
 name = "hermes_rs"
 description = "A dependency-free disassembler and assembler for the Hermes bytecode"
+repository = "https://github.com/Pilfer/hermes_rs"
+homepage = "https://github.com/Pilfer/hermes_rs"
 license = "MIT"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
