@@ -1,4 +1,4 @@
-# hermes-rs
+# hermes_rs
 
 Note: Still a WIP - A PR is always welcome.  
 
@@ -7,7 +7,7 @@ A dependency-free disassembler and assembler for the Hermes bytecode, written in
 
 A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging through the Hermes git repo, pulling all of the BytecodeDef files out, and tagging them. This made writing this tool much easier.
 
-- [hermes-rs](#hermes-rs)
+- [hermes\_rs](#hermes_rs)
     - [Supported HBC Versions](#supported-hbc-versions)
       - [Project Goals](#project-goals)
         - [Potential Use cases](#potential-use-cases)
@@ -45,7 +45,7 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
 
 - Find which functions reference specific strings
 - Generate frida hooks for mobile implementations
-  - hermes loader -> hook loading the package -> feed to hermes-rs -> patch code
+  - hermes loader -> hook loading the package -> feed to hermes_rs -> patch code
     for bidirectional communication or even just logging
 - Writing fuzzers
 
