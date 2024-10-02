@@ -7,7 +7,7 @@ use crate::hermes::big_int_table::BigIntTableEntry;
 use crate::hermes::bytecode_options::BytecodeOptions;
 use crate::hermes::cjs_module::{CJSModule, CJSModuleEntry, CJSModuleInt};
 use crate::hermes::debug_info::DebugInfoOffsets;
-use crate::hermes::decode::{decode_u32, decode_u64};
+use crate::hermes::decode::{align_reader, decode_u32, decode_u64};
 use crate::hermes::encode::{encode_u32, encode_u64};
 use crate::hermes::exception_handler::ExceptionHandlerInfo;
 use crate::hermes::function_header::FunctionHeader;
@@ -153,6 +153,8 @@ impl HermesStruct for HermesHeader {
         r.read_exact(&mut _pad_bytes)
             .expect("error reading padding bytes");
 
+        align_reader(r, 4).unwrap();
+
         // ============================= //
         // Read the function headers
         // Two storage sizes - small and large
@@ -185,11 +187,11 @@ impl HermesStruct for HermesHeader {
             }
 
             let mut fhv = function_header_val.clone();
-
             function_headers.push(function_header_val);
 
             // Read the ExceptionInfo
             if fhv.flags().has_exception_handler {
+                align_reader(r, 4).unwrap();
                 let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
                 let exc_headers_count = decode_u32(r);
                 for _ in 0..exc_headers_count {
@@ -207,6 +209,7 @@ impl HermesStruct for HermesHeader {
             }
 
             if fhv.flags().has_debug_info {
+                align_reader(r, 4).unwrap();
                 let debug_info = DebugInfoOffsets::deserialize(r, version);
                 match fhv {
                     FunctionHeader::Small(ref mut sfh) => {
@@ -422,6 +425,10 @@ impl HermesStruct for HermesHeader {
                 #[cfg(feature = "v95")]
                 95 => Some(Instruction::V95(
                     crate::hermes::v95::Instruction::deserialize(&mut r_cursor, op),
+                )),
+                #[cfg(feature = "v96")]
+                96 => Some(Instruction::V96(
+                    crate::hermes::v96::Instruction::deserialize(&mut r_cursor, op),
                 )),
                 _ => {
                     panic!("Unsupported HBC version: {:?}. Check Cargo.toml features to see if this HBC version is enabled.", self.version);
