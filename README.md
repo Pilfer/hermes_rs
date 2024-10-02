@@ -37,9 +37,10 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
 
 #### Project Goals
 
-- Full coverage for all public HBC versions
-- The ability to inject code stubs directly into the .hbc file for instrumentation
-- Textual HBC assembly
+- Full coverage for all public HBC versions  
+- The ability to inject code stubs directly into the .hbc file for instrumentation  
+- Textual HBC assembly  
+- Eventually a halfway decent decompiler, but that may be another project that uses this one  
 
 ##### Potential Use cases
 
