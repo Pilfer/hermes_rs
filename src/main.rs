@@ -8,7 +8,7 @@ use std::{fs::File, io};
 // This is mostly just a test function as of right now.
 // TODO: Scrap it and only export the lib
 fn main() {
-    let filename = "./input_data/test_file.hbc";
+    let filename = "./input_data/my_rn_hello_world.hbc.bundle";
     let f = File::open(filename).expect("no file found");
     let mut reader = io::BufReader::new(f);
     let header: HermesHeader = HermesStruct::deserialize(&mut reader, 0);
