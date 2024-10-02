@@ -653,7 +653,7 @@ pub enum Instruction {
 
 impl Instruction {
     // implement the methods of the trait
-    fn display(&self, _hermes: &HermesHeader) -> String {
+    pub fn display(&self, _hermes: &HermesHeader) -> String {
         match self {
             #[cfg(feature = "v89")]
             Instruction::V89(instruction) => instruction.display(_hermes),
@@ -670,7 +670,7 @@ impl Instruction {
         }
     }
 
-    fn is_jmp(&self) -> bool {
+    pub fn is_jmp(&self) -> bool {
         match self {
             #[cfg(feature = "v89")]
             Instruction::V89(instruction) => instruction.is_jmp(),
@@ -687,7 +687,7 @@ impl Instruction {
         }
     }
 
-    fn get_address_field(&self) -> u32 {
+    pub fn get_address_field(&self) -> u32 {
         match self {
             #[cfg(feature = "v89")]
             Instruction::V89(instruction) => instruction.get_address_field(),
@@ -704,7 +704,7 @@ impl Instruction {
         }
     }
 
-    fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         match self {
             #[cfg(feature = "v89")]
             Instruction::V89(instruction) => instruction.size(),
