@@ -8,3 +8,6 @@ junk
 input_data
 obsidian-out
 **/obsidian-export.rs
+**/gen.rs
+docs
+TODO.md

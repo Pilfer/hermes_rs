@@ -6,9 +6,9 @@ use std::{io, u32};
 use crate::hermes::big_int_table::BigIntTableEntry;
 use crate::hermes::bytecode_options::BytecodeOptions;
 use crate::hermes::cjs_module::{CJSModule, CJSModuleEntry, CJSModuleInt};
-use crate::hermes::debug_info::DebugInfoOffsets;
+use crate::hermes::debug_info::{DebugInfoOffsets };
 use crate::hermes::decode::{align_reader, decode_u32, decode_u64};
-use crate::hermes::encode::{encode_u32, encode_u64};
+use crate::hermes::encode::{align_writer, encode_u32, encode_u64};
 use crate::hermes::exception_handler::ExceptionHandlerInfo;
 use crate::hermes::function_header::FunctionHeader;
 use crate::hermes::function_header::{LargeFunctionHeader, SmallFunctionHeader};
@@ -17,12 +17,13 @@ use crate::hermes::regexp_table::RegExpTableEntry;
 use crate::hermes::string_kind::StringKindEntry;
 use crate::hermes::string_table::{OverflowStringTableEntry, SmallStringTableEntry};
 use crate::hermes::{Instruction, InstructionParser, Serializable};
+use super::debug_info::DebugInfo;
 
 #[derive(Debug)]
 pub struct HermesHeader {
     pub magic: u64,
     pub version: u32,
-    pub sha1: [u8; 20],
+    pub sha1: [u8; 20], // sha1 is the sha1 hash of the input source  JS file. Example: "eval(`print(123);`)" = a97c8302dab90bec7184a9183b22b43badd57a65
     pub file_length: u32,
     pub global_code_index: u32,
     pub function_count: u32,
@@ -56,12 +57,12 @@ pub struct HermesHeader {
     pub array_buffer_storage: Vec<u8>,
     pub object_key_buffer: Vec<u8>,
     pub object_val_buffer: Vec<u8>,
+    pub cjs_module_offset: u32,
 
     pub big_int_table: Vec<BigIntTableEntry>,
     pub reg_exp_table: Vec<RegExpTableEntry>,
     pub cjs_modules: Vec<CJSModule>,
     pub function_source_entries: Vec<FunctionSourceEntry>,
-    // options - u8, pad 19 bytes after
 }
 
 impl HermesHeader {
@@ -97,7 +98,7 @@ pub trait HermesStruct {
 
     fn serialize<W>(&self, w: &mut W)
     where
-        W: io::Write;
+        W: std::io::Write + std::io::Seek;
 
     fn size(&self) -> usize;
 
@@ -141,8 +142,21 @@ impl HermesStruct for HermesHeader {
         let array_buffer_size = decode_u32(r);
         let obj_key_buffer_size = decode_u32(r);
         let obj_value_buffer_size = decode_u32(r);
-        let segment_id = decode_u32(r);
-        let cjs_module_count = decode_u32(r);
+
+        let mut cjs_module_offset = 0;
+        let mut segment_id = 0;
+
+        if version < 78 {
+            cjs_module_offset = decode_u32(r);
+        } else {
+            segment_id = decode_u32(r);
+        }
+
+        let mut cjs_module_count = 0;
+        if version >= 84 {
+            cjs_module_count = decode_u32(r);
+        }
+
         let function_source_count = decode_u32(r);
         let debug_info_offset = decode_u32(r);
 
@@ -227,6 +241,7 @@ impl HermesStruct for HermesHeader {
 
         // Read string kinds
         let mut string_kinds: Vec<StringKindEntry> = vec![];
+        align_reader(r, 4).unwrap();
         for _string_kind_idx in 0..string_kind_count {
             let string_kind = StringKindEntry::deserialize(r, version);
             string_kinds.push(string_kind);
@@ -234,12 +249,14 @@ impl HermesStruct for HermesHeader {
 
         // Read identifier hashes
         let mut identifier_hashes: Vec<u32> = vec![];
+        align_reader(r, 4).unwrap();
         for _ in 0..identifier_count {
             identifier_hashes.push(decode_u32(r));
         }
 
         // Read small string table entry
         let mut string_storage: Vec<SmallStringTableEntry> = vec![];
+        align_reader(r, 4).unwrap();
         for _ in 0..string_count {
             let string_item = SmallStringTableEntry::deserialize(r, version);
             string_storage.push(string_item);
@@ -247,32 +264,38 @@ impl HermesStruct for HermesHeader {
 
         // Read overflow string table entries
         let mut overflow_string_storage: Vec<OverflowStringTableEntry> = vec![];
+        align_reader(r, 4).unwrap();
         for _ in 0..overflow_string_count {
             overflow_string_storage.push(OverflowStringTableEntry::deserialize(r, version));
         }
 
         // Read string storage bytes
         let mut string_storage_bytes_real = vec![0u8; string_storage_size as usize];
+        align_reader(r, 4).unwrap();
         r.read_exact(&mut string_storage_bytes_real)
             .expect("unable to read string storage");
 
         // Read array buffer storage
         let mut array_buffer_storage = vec![0u8; array_buffer_size as usize];
+        align_reader(r, 4).unwrap();
         r.read_exact(&mut array_buffer_storage)
             .expect("unable to read array buffer storage");
 
         // Read object key buffer
         let mut object_key_buffer = vec![0u8; obj_key_buffer_size as usize];
+        align_reader(r, 4).unwrap();
         r.read_exact(&mut object_key_buffer)
             .expect("unable to read object key buffer storage");
 
         // Read object value buffer
         let mut object_val_buffer = vec![0u8; obj_value_buffer_size as usize];
+        align_reader(r, 4).unwrap();
         r.read_exact(&mut object_val_buffer)
             .expect("unable to read object value buffer storage");
 
         // Read big int table
         let mut big_int_table = vec![];
+        align_reader(r, 4).unwrap();
         if big_int_count > 0 && version >= 87 {
             for _ in 0..big_int_count {
                 big_int_table.push(BigIntTableEntry::deserialize(r, version));
@@ -281,13 +304,14 @@ impl HermesStruct for HermesHeader {
 
         // Read regexp table
         let mut reg_exp_table = vec![];
+        align_reader(r, 4).unwrap();
         if reg_exp_count > 0 {
             for _ in 0..reg_exp_count {
                 reg_exp_table.push(RegExpTableEntry::deserialize(r, version));
             }
 
             // Read the regexp storage buffer
-            // TODO: make parser for this. The RegExp stuff has a bespoke bytecode as well.
+            // TODO: make parser for this. The RegExp stuff has a custom bytecode as well.
             // I'm not sure how useful it'd be for people to be able to dig through this, but for the sake
             // of completeness, it should be done.
             let mut reg_exp_storage = vec![0u8; reg_exp_storage_size as usize];
@@ -297,6 +321,7 @@ impl HermesStruct for HermesHeader {
 
         // Read CJS modules
         let mut cjs_modules: Vec<CJSModule> = vec![];
+        align_reader(r, 4).unwrap();
         if cjs_module_count > 0 {
             if options.cjs_modules_statically_resolved && version < 77 {
                 for _ in 0..cjs_module_count {
@@ -312,11 +337,17 @@ impl HermesStruct for HermesHeader {
         }
 
         let mut function_source_entries: Vec<FunctionSourceEntry> = vec![];
-        if function_source_count > 0 {
+        align_reader(r, 4).unwrap();
+        if function_source_count > 0 && version >= 84 {
             for _ in 0..function_source_count {
                 function_source_entries.push(FunctionSourceEntry::deserialize(r, version));
             }
         }
+
+        r.seek(io::SeekFrom::Start(debug_info_offset as u64))
+            .expect("unable to seek to debug info offset");
+
+        let debug_info = DebugInfo::deserialize(r, version);
 
         Self {
             magic,
@@ -337,6 +368,7 @@ impl HermesStruct for HermesHeader {
             array_buffer_size,
             obj_key_buffer_size,
             obj_value_buffer_size,
+            cjs_module_offset,
             segment_id,
             cjs_module_count,
             function_source_count,
@@ -567,6 +599,10 @@ impl HermesStruct for HermesHeader {
                         95 => Some(Instruction::V95(
                             crate::hermes::v95::Instruction::deserialize(&mut r_cursor, op),
                         )),
+                        #[cfg(feature = "v96")]
+                        96 => Some(Instruction::V96(
+                            crate::hermes::v96::Instruction::deserialize(&mut r_cursor, op),
+                        )),
                         _ => {
                             panic!("Unsupported HBC version: {:?}. Check Cargo.toml features to see if this HBC version is enabled.", self.version);
                             // None
@@ -638,7 +674,7 @@ impl HermesStruct for HermesHeader {
 
     fn serialize<W>(&self, w: &mut W)
     where
-        W: io::Write,
+        W: std::io::Write + std::io::Seek,
     {
         encode_u64(w, self.magic);
         encode_u32(w, self.version);
@@ -658,9 +694,18 @@ impl HermesStruct for HermesHeader {
         encode_u32(w, self.array_buffer_size);
         encode_u32(w, self.obj_key_buffer_size);
         encode_u32(w, self.obj_value_buffer_size);
-        encode_u32(w, self.segment_id);
+
+        if self.version < 78 {
+            encode_u32(w, self.cjs_module_offset);
+        } else {
+            encode_u32(w, self.segment_id);
+        }
+
         encode_u32(w, self.cjs_module_count);
-        encode_u32(w, self.function_source_count);
+        if self.version >= 84 {
+            encode_u32(w, self.cjs_module_count);
+        }
+
         encode_u32(w, self.debug_info_offset);
 
         self.options.serialize(w);
@@ -671,44 +716,98 @@ impl HermesStruct for HermesHeader {
 
         // Write function headers
         for fh in &self.function_headers {
-            fh.serialize(w);
+            match fh {
+                FunctionHeader::Small(sfh) => {
+                    align_writer(w, 4);
+                    sfh.serialize(w)
+                }
+                FunctionHeader::Large(lfh) => lfh.serialize(w),
+            }
         }
 
         // Write string kinds
+        align_writer(w, 4);
         for sk in &self.string_kinds {
             sk.serialize(w);
         }
 
         // Write identifier hashes
+        align_writer(w, 4);
         for ih in &self.identifier_hashes {
             encode_u32(w, *ih);
         }
 
         // Write string table entries
+        align_writer(w, 4);
         for ss in &self.string_storage {
             ss.serialize(w);
         }
 
         // Write overflow string table entries
+        align_writer(w, 4);
         for os in &self.overflow_string_storage {
             os.serialize(w);
         }
 
         // Write string storage bytes
+        align_writer(w, 4);
         w.write_all(&self.string_storage_bytes)
             .expect("unable to write string storage bytes");
 
         // Write array buffer storage
+        align_writer(w, 4);
         w.write_all(&self.array_buffer_storage)
             .expect("unable to write array buffer storage");
 
         // Write object key buffer
+        align_writer(w, 4);
         w.write_all(&self.object_key_buffer)
             .expect("unable to write object key buffer");
 
         // Write object value buffer
+        align_writer(w, 4);
         w.write_all(&self.object_val_buffer)
             .expect("unable to write object value buffer");
+
+        // Write big int table
+        align_writer(w, 4);
+        for bi in &self.big_int_table {
+            bi.serialize(w);
+        }
+        align_writer(w, 4);
+
+        // Write reg exp table
+        // TODO: actually look into this lol
+        align_writer(w, 4);
+        for re in &self.reg_exp_table {
+            re.serialize(w);
+        }
+        align_writer(w, 4);
+
+        // TODO: write reg_exp_storage bytes - needs to be added to the struct
+        // reg_exp_storage
+
+        // Write CJS modules
+        align_writer(w, 4);
+        for cjs in &self.cjs_modules {
+            if self.options.cjs_modules_statically_resolved && self.version < 77 {
+                match cjs {
+                    CJSModule::CJSModuleInt(cjs_int) => cjs_int.serialize(w),
+                    _ => panic!("CJSModuleInt expected, but got something else"),
+                }
+            } else {
+                match cjs {
+                    CJSModule::CJSModuleEntry(cjs_entry) => cjs_entry.serialize(w),
+                    _ => panic!("CJSModuleEntry expected, but got something else"),
+                }
+            }
+        }
+
+        // Write function source entries
+        align_writer(w, 4);
+        for fse in &self.function_source_entries {
+            fse.serialize(w);
+        }
     }
 
     // Read string

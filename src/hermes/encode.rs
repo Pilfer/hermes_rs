@@ -79,12 +79,52 @@ pub(crate) fn write_bitfield(bits: &mut [u8], start_bit: usize, num_bits: usize,
         let bits_in_current_byte = 8 - (bit_idx % 8);
         let bits_to_write = std::cmp::min(bits_in_current_byte, num_bits - written_bits);
 
-        let mask = ((1 << bits_to_write) - 1) << (bit_idx % 8);
-        let byte_value = ((value >> written_bits) & ((1 << bits_to_write) - 1)) << (bit_idx % 8);
+        if bits_to_write == 0 {
+            break;
+        }
 
-        bits[byte_idx] = (bits[byte_idx] & !mask) | byte_value as u8;
+        // Ensure bits_to_write is within a valid range
+        if bits_to_write >= 32 {
+            panic!("bits_to_write is too large: {}", bits_to_write);
+        }
+
+        let mask = ((1u32 << bits_to_write) - 1) << (bit_idx % 8);
+        let byte_value = ((value >> written_bits) & ((1u32 << bits_to_write) - 1)) << (bit_idx % 8);
+
+        bits[byte_idx] = (bits[byte_idx] & !(mask as u8)) | (byte_value as u8);
 
         written_bits += bits_to_write;
         bit_idx += bits_to_write;
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) fn encode_sleb128<W>(w: &mut W, value: i64)
+where
+    W: std::io::Write,
+{
+    let mut val = value;
+    loop {
+        let byte = (val & 0x7F) as u8;
+        val >>= 7;
+        if (val == 0 && byte & 0x40 == 0) || (val == -1 && byte & 0x40 != 0) {
+            encode_u8(w, byte);
+            break;
+        } else {
+            encode_u8(w, byte | 0x80);
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub fn align_writer<W>(w: &mut W, alignment: usize)
+where
+    W: std::io::Write + std::io::Seek,
+{
+    let padding = (alignment
+        - (w.seek(std::io::SeekFrom::Current(0)).unwrap() as usize) % alignment)
+        % alignment;
+    for _ in 0..padding {
+        encode_u8(w, 0);
     }
 }

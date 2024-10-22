@@ -561,11 +561,6 @@ macro_rules! build_instructions {
     impl Clone for Instruction {
       fn clone(&self) -> Self {
         *self
-        // match self {
-        //   $(
-        //     Instruction::$instruction(insn) => Instruction::$instruction(insn.clone()),
-        //   )*
-        // }
       }
     }
 
@@ -652,7 +647,6 @@ pub enum Instruction {
 }
 
 impl Instruction {
-    // implement the methods of the trait
     pub fn display(&self, _hermes: &HermesHeader) -> String {
         match self {
             #[cfg(feature = "v89")]
@@ -720,6 +714,47 @@ impl Instruction {
             Instruction::V96(instruction) => instruction.size(),
         }
     }
+
+    pub fn serialize<W>(&self, w: &mut W)
+    where
+        W: std::io::Write,
+    {
+        match self {
+            #[cfg(feature = "v89")]
+            Instruction::V89(instruction) => instruction.serialize(w),
+            #[cfg(feature = "v90")]
+            Instruction::V90(instruction) => instruction.serialize(w),
+            #[cfg(feature = "v93")]
+            Instruction::V93(instruction) => instruction.serialize(w),
+            #[cfg(feature = "v94")]
+            Instruction::V94(instruction) => instruction.serialize(w),
+            #[cfg(feature = "v95")]
+            Instruction::V95(instruction) => instruction.serialize(w),
+            #[cfg(feature = "v96")]
+            Instruction::V96(instruction) => instruction.serialize(w),
+        }
+    }
+
+    pub fn deserialize<R>(r: &mut R, op: u8) -> Self
+    where
+        R: io::Read + io::BufRead + io::Seek,
+    {
+        match op {
+            #[cfg(feature = "v89")]
+            89 => Instruction::V89(v89::Instruction::deserialize(r, op)),
+            #[cfg(feature = "v90")]
+            90 => Instruction::V90(v90::Instruction::deserialize(r, op)),
+            #[cfg(feature = "v93")]
+            93 => Instruction::V93(v93::Instruction::deserialize(r, op)),
+            #[cfg(feature = "v94")]
+            94 => Instruction::V94(v94::Instruction::deserialize(r, op)),
+            #[cfg(feature = "v95")]
+            95 => Instruction::V95(v95::Instruction::deserialize(r, op)),
+            #[cfg(feature = "v96")]
+            96 => Instruction::V96(v96::Instruction::deserialize(r, op)),
+            _ => Instruction::V96(v96::Instruction::deserialize(r, op)),
+        }
+    }
 }
 
 pub trait Serializable {
@@ -734,7 +769,45 @@ pub trait Serializable {
 
     fn serialize<W>(&self, w: &mut W)
     where
-        W: io::Write;
+        W: std::io::Write + std::io::Seek;
 
     fn size(&self) -> usize;
+}
+
+#[macro_export]
+/**
+ * This macro is used to define a list of instructions for a given version of Hermes.
+ * It will return a `Vec<Instruction>` that can be serialized into the bytecode section
+ * of a Hermes executable.
+```rust
+let instructions = instructions!(
+    hermes_rs::v96, // Version is required
+    LoadConstString { r0: 0, p0: 1 },
+    DirectEval {
+        r0: 0,
+        r1: 0,
+        p0: 0
+    },
+    Ret { r0: 0 },
+).unwrap();
+```
+ */
+macro_rules! define_instructions {
+  ($version:path, $($instr:ident { $($field:ident: $value:expr),* }),* $(,)?) => {
+      {
+          use $version::{str_to_op, Instruction};
+          use $version::{ $(
+              $instr,
+          )* };
+
+          Some(vec![
+              $(
+                  Instruction::$instr ($instr{
+                      op: str_to_op(stringify!($instr)),
+                      $($field: $value),*
+                  }),
+              )*
+          ])
+      }
+  };
 }

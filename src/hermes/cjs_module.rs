@@ -34,7 +34,7 @@ impl Serializable for CJSModuleEntry {
 
     fn serialize<W>(&self, w: &mut W)
     where
-        W: io::Write,
+        W: std::io::Write + std::io::Seek,
     {
         encode_u32(w, self.symbol_id);
         encode_u32(w, self.offset);
@@ -63,7 +63,7 @@ impl Serializable for CJSModuleInt {
 
     fn serialize<W>(&self, w: &mut W)
     where
-        W: io::Write,
+        W: std::io::Write + std::io::Seek,
     {
         encode_u32(w, self.value);
     }

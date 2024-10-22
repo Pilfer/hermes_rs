@@ -18,8 +18,8 @@ pub struct StringKindEntryOld {
 
 #[derive(Debug)]
 pub enum StringKindEntry {
-    Old(StringKindEntryNew),
-    New(StringKindEntryOld),
+    Old(StringKindEntryOld),
+    New(StringKindEntryNew),
 }
 
 impl Serializable for StringKindEntry {
@@ -37,14 +37,14 @@ impl Serializable for StringKindEntry {
         R: io::Read + io::BufRead + io::Seek,
     {
         match _version {
-            0..=71 => StringKindEntry::Old(StringKindEntryNew::deserialize(r, _version)),
-            72_u32..=u32::MAX => StringKindEntry::New(StringKindEntryOld::deserialize(r, _version)),
+            0..=71 => StringKindEntry::Old(StringKindEntryOld::deserialize(r, _version)),
+            72_u32..=u32::MAX => StringKindEntry::New(StringKindEntryNew::deserialize(r, _version)),
         }
     }
 
     fn serialize<W>(&self, w: &mut W)
     where
-        W: io::Write,
+        W: std::io::Write + std::io::Seek,
     {
         match self {
             StringKindEntry::Old(entry) => entry.serialize(w),
