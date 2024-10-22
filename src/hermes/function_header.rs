@@ -392,7 +392,7 @@ impl FunctionHeader {
 
     pub fn serialize<W>(&self, w: &mut W)
     where
-        W: io::Write,
+        W: std::io::Write + std::io::Seek,
     {
         match self {
             FunctionHeader::Small(fh) => fh.serialize(w),
@@ -420,107 +420,6 @@ impl FunctionHeader {
     }
 }
 
-/*
-impl FunctionHeader for SmallFunctionHeader {
-    fn offset(&self) -> u32 {
-        self.offset
-    }
-
-    fn param_count(&self) -> u32 {
-        self.param_count
-    }
-
-    fn byte_size(&self) -> u32 {
-        self.byte_size
-    }
-
-    fn func_name(&self) -> u32 {
-        self.func_name
-    }
-
-    fn info_offset(&self) -> u32 {
-        self.info_offset
-    }
-
-    fn frame_size(&self) -> u32 {
-        self.frame_size
-    }
-
-    fn env_size(&self) -> u32 {
-        self.env_size
-    }
-
-    fn highest_read_cache_index(&self) -> u32 {
-        self.highest_read_cache_index
-    }
-
-    fn highest_write_cache_index(&self) -> u32 {
-        self.highest_write_cache_index
-    }
-
-    fn flags(&self) -> FunctionHeaderFlag {
-        self.flags.clone()
-    }
-
-    fn exception_handlers(&self) -> Vec<ExceptionHandlerInfo> {
-        self.exception_handlers.clone()
-    }
-
-    fn debug_info(&self) -> DebugInfoOffsets {
-        self.debug_info.clone()
-    }
-}
-
-impl FunctionHeader for LargeFunctionHeader {
-    fn offset(&self) -> u32 {
-        self.offset
-    }
-
-    fn param_count(&self) -> u32 {
-        self.param_count
-    }
-
-    fn byte_size(&self) -> u32 {
-        self.byte_size
-    }
-
-    fn func_name(&self) -> u32 {
-        self.func_name
-    }
-
-    fn info_offset(&self) -> u32 {
-        self.info_offset
-    }
-
-    fn frame_size(&self) -> u32 {
-        self.frame_size
-    }
-
-    fn env_size(&self) -> u32 {
-        self.env_size
-    }
-
-    fn highest_read_cache_index(&self) -> u32 {
-        self.highest_read_cache_index
-    }
-
-    fn highest_write_cache_index(&self) -> u32 {
-        self.highest_write_cache_index
-    }
-
-    fn flags(&self) -> FunctionHeaderFlag {
-        self.flags.clone()
-    }
-
-    fn exception_handlers(&self) -> Vec<ExceptionHandlerInfo> {
-        self.exception_handlers.clone()
-    }
-
-    fn debug_info(&self) -> DebugInfoOffsets {
-        self.debug_info.clone()
-    }
-}
-*/
 
 #[derive(Debug, Clone)]
 pub enum FunctionHeaderFlagProhibitions {

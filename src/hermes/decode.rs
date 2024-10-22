@@ -97,6 +97,26 @@ where
     decode_u8(r) as i8
 }
 
+#[allow(dead_code)]
+pub(crate) fn decode_sleb128<R>(r: &mut R) -> i64
+where
+    R: ?Sized + io::Read,
+{
+    let mut result = 0;
+    let mut shift = 0;
+    loop {
+        let mut buf = [0u8; 1];
+        r.read_exact(&mut buf).expect("Could not decode sleb128");
+        let byte = buf[0] as i8;
+        result |= ((byte & 0x7F) as i64) << shift;
+        shift += 7;
+        if byte >= 0 {
+            break;
+        }
+    }
+    result
+}
+
 pub(crate) fn read_bitfield(bits: &[u8], start_bit: usize, num_bits: usize) -> u32 {
     let mut value: u32 = 0;
     let mut written_bits = 0;

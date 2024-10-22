@@ -28,6 +28,7 @@ fn main() {
     //    println!("Function name: {}", name);
     //}
 
+    // Works - prints out the bytecode for the first function (Function<global>(1 params, 19 registers, 0 symbols)...)
     header.parse_bytecode_for_fn(0, &mut reader);
 
     // if writer == vec![115, 0, 2, 0, 98, 92, 0] {

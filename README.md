@@ -3,7 +3,7 @@
 Note: Still a WIP - A PR is always welcome.  
 
 
-A dependency-free disassembler and assembler for the Hermes bytecode, written in Rust.
+A *nearly* dependency-free disassembler and assembler for the Hermes bytecode, written in Rust. 
 
 A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging through the Hermes git repo, pulling all of the BytecodeDef files out, and tagging them. This made writing this tool much easier.
 
@@ -52,11 +52,10 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
 
 #### Features
 
-- bLaZiNgLy FaSt
-- Export strings
-- Export bytecode
-- Encoding instructions piecemeal
-- Reduce binary size by [only enabling certain versions of HBC](#using-specific-hbc-versions)
+- Disassemble Hermes Bytecode (HBC)  
+- Assemble Hermes Bytecode (HBC)  
+- Type-safe instruction building across multiple versions of HBC  
+- The ability to reduce binary size by [only enabling certain versions of HBC](#using-specific-hbc-versions)
 
 ## Installation
 
@@ -171,33 +170,33 @@ Function<foo>(1 params, 1 registers, 0 symbols):
 
 Encoding instructions is trivial - each `Instruction` implements a trait with `deserialize` and `serialize` methods.
 
-You can alias the imports for your version to shorten the code, but fully-expanded it may look something like this:
 
 ```rust
-let load_const_string = hermes::v94::Instruction::LoadConstString(hermes::v94::LoadConstString {
-  op: hermes::v94::str_to_op("LoadConstString"),
-  r0: 0,
-  p0: 2,
-});
+use hermes_rs::{define_instructions, InstructionParser};
 
-let async_break_check = hermes::v94::Instruction::AsyncBreakCheck(hermes::v94::AsyncBreakCheck {
-  op: hermes::v94::str_to_op("AsyncBreakCheck"),
-});
-
-let ret = hermes::v94::Instruction::Ret(hermes::v94::Ret {
-    op: hermes::v94::str_to_op("Ret"),
-    r0: 0,
-});
-
-let instructions = vec![load_const_string, async_break_check, ret];
+/*
+ * Use the define_instructions macro to get a vec of the correct instructions
+ * for the version of Hermes you're targeting.
+* The first parameter is the hermes version you'd like to use.
+*
+* The bytecode below represents: eval(`print(123);`)
+* The `print(123)` string is the second (index 1) string in the string table.
+*/
+let instructions = define_instructions!(
+    hermes_rs::v96,
+    LoadConstString { r0: 0, p0: 1 },   // Load `print(123);` into r0
+    DirectEval { r0: 0, r1: 0, p0: 0 }, // Evaluate the string
+    Ret { r0: 0 },                      // Return
+).unwrap();
 
 let mut writer = Vec::new();
+
 for instr in instructions {
     instr.serialize(&mut writer);
 }
 
 // Make sure the encoded bytes are valid
-assert!(writer == vec![115, 0, 2, 0, 98, 92, 0], "Bytecode is incorrect!");
+assert!(writer == vec![115, 0, 1, 0, 94, 0, 0, 0, 92, 0], "Bytecode is incorrect!");
 ```
 
 #### Using specific HBC Versions
@@ -215,8 +214,11 @@ hermes_rs = { features = ["v89", "v90", "v93", "v94", "v95"] }
 
 # Hermes Resources
 
-I leaned heavily on the following projects and resources to develop this package.
+**My Stuff**  
 
+- **Github\.io Page**: https://pilfer.github.io/mobile-reverse-engineering/react-native/  
+
+**Other Resources**  
 - **Official docs**: https://hermesengine.dev/
   - Source: https://github.com/facebook/hermes
 - **hermes-dec** disassembler/decompiler:
@@ -332,20 +334,20 @@ Finally, add the `feature` (`v100 = []`) to Cargo.toml.
 ---
 
 ## TODO
-- [ ] DebugInfo definition stuff  
+- [X] DebugInfo definition stuff  
 - [ ] Add comments  
 - [ ] Add docs  
 - [ ] `Serializer` implementations for everything    
 
 | Struct                   | Deserialize | Serialize | Size |
 | ------------------------ | ----------- | --------- | ---- |
-| HermesHeader             | ✅          | ❌        | ❌   |
-| SmallFunctionHeader      | ✅          | ❌        | ❌   |
+| HermesHeader             | ✅          | ✅        | ✅   |
+| SmallFunctionHeader      | ✅          | ✅        | ✅   |
 | FunctionHeader           | ✅          | ✅        | ✅   |
 | StringKindEntry          | ✅          | ✅        | ✅   |
 | SmallStringTableEntry    | ✅          | ✅        | ✅   |
 | OverflowStringTableEntry | ✅          | ✅        | ✅   |
-| BigIntTableEntry         | ✅          | ❌        | ❌   |
+| BigIntTableEntry         | ✅          | ✅        | ✅   |
 | BytecodeOptions          | ✅          | ✅        | ✅   |
 | DebugInfoOffsets         | ✅          | ✅        | ✅   |
 | DebugInfoHeader          | ✅          | ✅        | ✅   |
@@ -359,6 +361,7 @@ Finally, add the `feature` (`v100 = []`) to Cargo.toml.
 ```cpp
 // From official Hermes source code
 void visitBytecodeSegmentsInOrder(Visitor &visitor) {
+  // Hermes Header
   visitor.visitFunctionHeaders();
   visitor.visitStringKinds();
   visitor.visitIdentifierHashes();
@@ -374,5 +377,7 @@ void visitBytecodeSegmentsInOrder(Visitor &visitor) {
   visitor.visitRegExpStorage();
   visitor.visitCJSModuleTable();
   visitor.visitFunctionSourceTable();
+  // Debug Info (if present)
+  // Footer
 }
 ```
