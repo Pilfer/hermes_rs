@@ -1,8 +1,8 @@
 use std::io;
 
 use crate::hermes::debug_info::DebugInfoOffsets;
-use crate::hermes::decode::{decode_u32, decode_u8, read_bitfield};
-use crate::hermes::encode::write_bitfield;
+use crate::hermes::decode::{align_reader, decode_u32, decode_u8, read_bitfield};
+use crate::hermes::encode::{align_writer, write_bitfield};
 use crate::hermes::exception_handler::ExceptionHandlerInfo;
 use crate::hermes::Serializable;
 
@@ -19,7 +19,7 @@ pub struct SmallFunctionHeader {
     pub highest_write_cache_index: u32,
     pub flags: FunctionHeaderFlag,
     pub exception_handlers: Vec<ExceptionHandlerInfo>,
-    pub debug_info: DebugInfoOffsets,
+    pub debug_info: Option<DebugInfoOffsets>,
 }
 
 impl Serializable for SmallFunctionHeader {
@@ -71,6 +71,35 @@ impl Serializable for SmallFunctionHeader {
             overflowed: overflowed == 1,
         };
 
+        //
+        // https://github.com/facebook/hermes/blob/d964f6b125426f919ad30fb09ff09b9d5f041743/lib/BCGen/HBC/BytecodeDataProvider.cpp#L646
+        //
+        let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
+        if flags.has_exception_handler {
+            align_reader(r, 4).unwrap();
+            let exception_handler_count = decode_u32(r);
+            // iterate and map exception handlers
+            for _ in 0..exception_handler_count {
+                println!("Exception Handler count: {}", exception_handler_count);
+                exception_handlers.push(ExceptionHandlerInfo::deserialize(r, _version));
+            }
+        }
+
+        let _current_pos = r.stream_position().unwrap();
+        let debug_info = if flags.has_debug_info {
+            // Go to the debug info offset for this function header to read the debug info
+            r.seek(io::SeekFrom::Start(info_offset as u64)).unwrap();
+
+            // Read the debug info
+            let dio = Some(DebugInfoOffsets::deserialize(r, _version));
+
+            // Go back to the original position since we're done reading the debug info
+            r.seek(io::SeekFrom::Start(_current_pos)).unwrap();
+            dio
+        } else {
+            None
+        };
+
         SmallFunctionHeader {
             offset,
             param_count,
@@ -82,18 +111,14 @@ impl Serializable for SmallFunctionHeader {
             highest_read_cache_index,
             highest_write_cache_index,
             flags,
-            exception_handlers: vec![],
-            debug_info: DebugInfoOffsets {
-                src: 0,
-                scope_desc: 0,
-                callee: 0,
-            },
+            exception_handlers,
+            debug_info,
         }
     }
 
     fn serialize<W>(&self, w: &mut W)
     where
-        W: io::Write,
+        W: io::Write + io::Seek,
     {
         let mut func_header_bytes = [0u8; 16];
         write_bitfield(&mut func_header_bytes, 0, 25, self.offset);
@@ -129,6 +154,7 @@ impl Serializable for SmallFunctionHeader {
                 write_bitfield(&mut flags_byte, 0, 2, 2)
             }
         }
+
         write_bitfield(&mut flags_byte, 2, 1, self.flags.strict_mode as u32);
         write_bitfield(
             &mut flags_byte,
@@ -143,6 +169,18 @@ impl Serializable for SmallFunctionHeader {
 
         w.write_all(&func_header_bytes)
             .expect("unable to write first word");
+
+        if self.flags.has_exception_handler {
+            align_writer(w, 4);
+            for handler in &self.exception_handlers {
+                handler.serialize(w);
+            }
+        }
+
+        if self.flags.has_debug_info && self.debug_info.is_some() {
+            align_writer(w, 4);
+            self.debug_info.as_ref().unwrap().serialize(w);
+        }
     }
 }
 
@@ -159,7 +197,7 @@ pub struct LargeFunctionHeader {
     pub highest_write_cache_index: u32,
     pub flags: FunctionHeaderFlag,
     pub exception_handlers: Vec<ExceptionHandlerInfo>,
-    pub debug_info: DebugInfoOffsets,
+    pub debug_info: Option<DebugInfoOffsets>,
 }
 
 impl Serializable for LargeFunctionHeader {
@@ -209,6 +247,31 @@ impl Serializable for LargeFunctionHeader {
             overflowed: overflowed == 1,
         };
 
+        let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
+        if flags.has_exception_handler {
+            // handle exception handlers
+            align_reader(r, 4).unwrap();
+            let exception_handler_count = decode_u32(r);
+            for _ in 0..exception_handler_count {
+                exception_handlers.push(ExceptionHandlerInfo::deserialize(r, _version));
+            }
+        }
+
+        let _current_pos = r.stream_position().unwrap();
+        let debug_info = if flags.has_debug_info {
+            // Go to the debug info offset for this function header to read the debug info
+            r.seek(io::SeekFrom::Start(info_offset as u64)).unwrap();
+            let dio = Some(DebugInfoOffsets::deserialize(r, _version));
+            // Go back to the original position since we're done reading the debug info
+            r.seek(io::SeekFrom::Start(_current_pos)).unwrap();
+            dio
+        } else {
+            // TODO: Make this a None later.
+            None
+        };
+
+        println!("Large Debug info: {:#?}", debug_info);
+
         LargeFunctionHeader {
             offset,
             param_count,
@@ -220,18 +283,14 @@ impl Serializable for LargeFunctionHeader {
             highest_read_cache_index: highest_read_cache_index as u32,
             highest_write_cache_index: highest_write_cache_index as u32,
             flags,
-            exception_handlers: vec![],
-            debug_info: DebugInfoOffsets {
-                src: 0,
-                scope_desc: 0,
-                callee: 0,
-            },
+            exception_handlers,
+            debug_info,
         }
     }
 
     fn serialize<W>(&self, w: &mut W)
     where
-        W: io::Write,
+        W: io::Write + io::Seek,
     {
         let mut func_header_bytes = [0u8; 16];
         write_bitfield(&mut func_header_bytes, 0, 25, self.offset);
@@ -281,6 +340,18 @@ impl Serializable for LargeFunctionHeader {
 
         w.write_all(&func_header_bytes)
             .expect("unable to write first word");
+
+        if self.flags.has_exception_handler {
+            align_writer(w, 4);
+            for handler in &self.exception_handlers {
+                handler.serialize(w);
+            }
+        }
+
+        if self.flags.has_debug_info && self.debug_info.is_some() {
+            align_writer(w, 4);
+            self.debug_info.as_ref().unwrap().serialize(w);
+        }
     }
 }
 
@@ -383,7 +454,7 @@ impl FunctionHeader {
         }
     }
 
-    pub fn debug_info(&self) -> DebugInfoOffsets {
+    pub fn debug_info(&self) -> Option<DebugInfoOffsets> {
         match self {
             FunctionHeader::Small(fh) => fh.debug_info.clone(),
             FunctionHeader::Large(fh) => fh.debug_info.clone(),
@@ -400,18 +471,6 @@ impl FunctionHeader {
         }
     }
 
-    pub fn deserialize<R>(r: &mut R, _version: u32) -> Self
-    where
-        R: io::Read + io::BufRead + io::Seek,
-    {
-        let offset = decode_u32(r);
-        if offset & 0x80000000 == 0 {
-            FunctionHeader::Small(SmallFunctionHeader::deserialize(r, _version))
-        } else {
-            FunctionHeader::Large(LargeFunctionHeader::deserialize(r, _version))
-        }
-    }
-
     pub fn size(&self) -> usize {
         match self {
             FunctionHeader::Small(fh) => fh.size(),
@@ -419,7 +478,6 @@ impl FunctionHeader {
         }
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub enum FunctionHeaderFlagProhibitions {

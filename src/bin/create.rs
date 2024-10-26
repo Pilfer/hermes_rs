@@ -1,16 +1,19 @@
-use hermes_rs::debug_info::{
-    DebugFileRegion, DebugInfo, DebugInfoHeader, DebugInfoOffsets, DebugStringTable,
+fn main() {}
+
+/* use hermes_rs::debug_info::{
+    DebugFileRegion, DebugInfo, DebugInfoHeader, DebugInfoOffsetsNew, DebugStringTable,
 };
 
-use hermes_rs::{define_instructions, InstructionParser};
+use hermes_rs::{define_instructions, HermesFile, InstructionParser};
 use sha1::{Digest, Sha1};
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+use std::rc::Weak;
 
 use hermes_rs::bytecode_options::BytecodeOptions;
 use hermes_rs::function_header::FunctionHeader;
 use hermes_rs::string_kind::StringKindEntryNew;
 use hermes_rs::{
-    FunctionHeaderFlag, HermesHeader, HermesStruct, Serializable, SmallFunctionHeader,
+    FunctionHeaderFlag, HermesHeader, HermesStructReader, Serializable, SmallFunctionHeader,
     SmallStringTableEntry,
 };
 
@@ -19,8 +22,11 @@ use hermes_rs::encode::align_writer;
 use std::{fs::File, io, vec};
 
 fn main() {
+    let bytebuff = vec![];
+    let mut hermes_file = HermesFile::new(io::BufReader::new(Cursor::new(bytebuff)));
+
     // identical to the old version, sans bytecode fields it looks like.
-    let mut newheader: HermesHeader = HermesHeader {
+    hermes_file.header = HermesHeader {
         magic: 2240826417119764422,
         version: 96,
         sha1: [
@@ -47,64 +53,64 @@ fn main() {
         cjs_module_count: 0,
         function_source_count: 0,
         debug_info_offset: 200,
-        function_headers: vec![FunctionHeader::Small(SmallFunctionHeader {
-            offset: 176,
-            param_count: 1,
-            byte_size: 10,
-            func_name: 0,
-            info_offset: 188,
-            frame_size: 1,
-            env_size: 0,
-            highest_read_cache_index: 0,
-            highest_write_cache_index: 0,
-            flags: FunctionHeaderFlag {
-                prohibit_invoke: hermes_rs::FunctionHeaderFlagProhibitions::ProhibitNone,
-                strict_mode: false,
-                has_exception_handler: false,
-                has_debug_info: true,
-                overflowed: false,
-            },
-            exception_handlers: vec![],
-            debug_info: DebugInfoOffsets {
-                src: 0,
-                scope_desc: 0,
-                callee: 0,
-            },
-        })],
         options: BytecodeOptions {
             static_builtins: false,
             cjs_modules_statically_resolved: false,
             has_async: false,
             flags: false,
         },
-        string_kinds: vec![hermes_rs::StringKindEntry::New(StringKindEntryNew {
-            count: 2,
-            kind: hermes_rs::StringKind::String,
-        })],
-        identifier_hashes: vec![],
-        string_storage: vec![
-            SmallStringTableEntry {
-                length: 6,
-                offset: 0,
-                is_utf_16: false,
-            },
-            SmallStringTableEntry {
-                length: 11,
-                offset: 6,
-                is_utf_16: false,
-            },
-        ],
-        string_storage_bytes: vec![
-            103, 108, 111, 98, 97, 108, 112, 114, 105, 110, 116, 40, 49, 50, 51, 41, 59,
-        ],
-        overflow_string_storage: vec![],
-        array_buffer_storage: vec![],
-        object_key_buffer: vec![],
-        object_val_buffer: vec![],
-        big_int_table: vec![],
-        reg_exp_table: vec![],
-        cjs_modules: vec![],
-        function_source_entries: vec![],
+        // function_headers: vec![FunctionHeader::Small(SmallFunctionHeader {
+        //     offset: 176,
+        //     param_count: 1,
+        //     byte_size: 10,
+        //     func_name: 0,
+        //     info_offset: 188,
+        //     frame_size: 1,
+        //     env_size: 0,
+        //     highest_read_cache_index: 0,
+        //     highest_write_cache_index: 0,
+        //     flags: FunctionHeaderFlag {
+        //         prohibit_invoke: hermes_rs::FunctionHeaderFlagProhibitions::ProhibitNone,
+        //         strict_mode: false,
+        //         has_exception_handler: false,
+        //         has_debug_info: true,
+        //         overflowed: false,
+        //     },
+        //     exception_handlers: vec![],
+        //     debug_info: DebugInfoOffsets {
+        //         src: 0,
+        //         scope_desc: 0,
+        //         callee: 0,
+        //     },
+        // })],
+        // string_kinds: vec![hermes_rs::StringKindEntry::New(StringKindEntryNew {
+        //     count: 2,
+        //     kind: hermes_rs::StringKind::String,
+        // })],
+        // identifier_hashes: vec![],
+        // string_storage: vec![
+        //     SmallStringTableEntry {
+        //         length: 6,
+        //         offset: 0,
+        //         is_utf_16: false,
+        //     },
+        //     SmallStringTableEntry {
+        //         length: 11,
+        //         offset: 6,
+        //         is_utf_16: false,
+        //     },
+        // ],
+        // string_storage_bytes: vec![
+        //     103, 108, 111, 98, 97, 108, 112, 114, 105, 110, 116, 40, 49, 50, 51, 41, 59,
+        // ],
+        // overflow_string_storage: vec![],
+        // array_buffer_storage: vec![],
+        // object_key_buffer: vec![],
+        // object_val_buffer: vec![],
+        // big_int_table: vec![],
+        // reg_exp_table: vec![],
+        // cjs_modules: vec![],
+        // function_source_entries: vec![],
         _padding: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     };
 
@@ -129,9 +135,7 @@ fn main() {
     align_writer(&mut writer, 32);
 
     writer
-        .seek(io::SeekFrom::Start(
-            newheader.function_headers[0].offset() as u64
-        ))
+        .seek(io::SeekFrom::Start(self.function_headers[0].offset() as u64))
         .expect("unable to seek to offset");
 
     for instr in instructions {
@@ -244,3 +248,4 @@ fn main() {
 
     println!("File 'eval_print.hbc' was created.");
 }
+ */

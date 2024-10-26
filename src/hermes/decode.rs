@@ -141,27 +141,16 @@ pub(crate) fn read_bitfield(bits: &[u8], start_bit: usize, num_bits: usize) -> u
     value
 }
 
-// Make a function to print where the cursor is in the reader
-pub(crate) fn _print_cursor<R>(r: &mut R) -> io::Result<u64>
-where
-    R: io::Read + io::Seek,
-{
-    #[allow(clippy::seek_from_current)]
-    let pos = r.seek(io::SeekFrom::Current(0))?;
-    println!("Cursor is at position: {:#X}", pos);
-    Ok(pos)
-}
-
 #[allow(dead_code)]
 pub(crate) fn align_reader<R>(r: &mut R, num_bytes: u64) -> io::Result<u64>
 where
     R: io::Read + io::Seek,
 {
-    let mut current_pos = r.seek(io::SeekFrom::Current(0))?;
+    let mut current_pos = r.stream_position().unwrap();
     let align = num_bytes - (current_pos % num_bytes);
     if align != num_bytes {
         r.seek(io::SeekFrom::Current(align as i64))?;
     }
-    current_pos = r.seek(io::SeekFrom::Current(0))?;
+    current_pos = r.stream_position().unwrap();
     Ok(current_pos)
 }

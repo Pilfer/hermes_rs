@@ -1,7 +1,7 @@
 #[macro_use]
 pub mod hermes;
 
-use hermes::{HermesHeader, HermesStruct};
+use hermes::{HermesHeader, HermesStructReader};
 
 use std::{fs::File, io};
 
@@ -11,10 +11,10 @@ fn main() {
     let filename = "./input_data/my_rn_hello_world.hbc.bundle";
     let f = File::open(filename).expect("no file found");
     let mut reader = io::BufReader::new(f);
-    let header: HermesHeader = HermesStruct::deserialize(&mut reader, 0);
+    let header: HermesHeader = HermesStructReader::deserialize(&mut reader, 0);
 
     println!("HBC Version: {:?}", header.version);
-
+    /*
     // works
     // header.function_headers.iter().for_each(|fh| {
     // println!("function header: {:?}", fh);
@@ -35,9 +35,10 @@ fn main() {
     //     println!("Bytecode is correct!");
     // } else {
     //     println!("Bytecode is incorrect!");
-    // }
+    // } */
 }
 
+/*
 #[allow(dead_code)]
 fn get_all_function_names(header: &HermesHeader) -> Vec<String> {
     let mut function_names = Vec::new();
@@ -61,3 +62,4 @@ fn get_all_function_names(header: &HermesHeader) -> Vec<String> {
     }
     function_names
 }
+ */

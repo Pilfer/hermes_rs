@@ -1,4 +1,7 @@
-use hermes_rs::{HermesHeader, HermesStruct};
+fn main() {}
+
+/*
+use hermes_rs::{HermesHeader, HermesStructReader};
 
 use std::{fs::File, io};
 
@@ -9,7 +12,7 @@ fn main() {
     let filename = "./junk/eval.hbc";
     let f = File::open(filename).expect("no file found");
     let mut reader = io::BufReader::new(f);
-    let header: HermesHeader = HermesStruct::deserialize(&mut reader, 0);
+    let header: HermesHeader = HermesStructReader::deserialize(&mut reader, 0);
 
     println!("HBC Version: {:?}", header);
 
@@ -17,7 +20,7 @@ fn main() {
         println!("function header: {:?}", fh);
     });
 
-    /*
+    / *
         let load_const_string =
             hermes::v94::Instruction::LoadConstString(hermes::v94::LoadConstString {
                 op: hermes::v94::str_to_op("LoadConstString"),
@@ -47,7 +50,7 @@ fn main() {
             writer == vec![115, 0, 2, 0, 98, 92, 0],
             "Bytecode is incorrect!"
         );
-    */
+    * /
 
     // if writer == vec![115, 0, 2, 0, 98, 92, 0] {
     //     println!("Bytecode is correct!");
@@ -55,3 +58,4 @@ fn main() {
     //     println!("Bytecode is incorrect!");
     // }
 }
+*/

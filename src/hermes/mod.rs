@@ -8,6 +8,7 @@ pub mod exception_handler;
 pub mod function_header;
 pub mod function_sources;
 pub mod header;
+pub mod hermes_file;
 pub mod regexp_table;
 pub mod string_kind;
 pub mod string_table;
@@ -17,7 +18,8 @@ use std::io;
 pub use function_header::{
     FunctionHeaderFlag, FunctionHeaderFlagProhibitions, SmallFunctionHeader,
 };
-pub use header::{HermesHeader, HermesStruct};
+pub use header::{HermesHeader, HermesStructReader};
+pub use hermes_file::HermesFile;
 pub use string_kind::{StringKind, StringKindEntry};
 pub use string_table::{OverflowStringTableEntry, SmallStringTableEntry};
 
@@ -43,7 +45,9 @@ pub trait InstructionParser {
     where
         W: io::Write;
 
-    fn display(&self, hermes: &HermesHeader) -> String;
+    fn display<R>(&self, hermes: &HermesFile<R>) -> String
+    where
+        R: io::Read + io::BufRead + io::Seek;
 
     /// Size of the struct when encoded.
     fn size(&self) -> usize;
@@ -427,13 +431,15 @@ macro_rules! define_opcode {
     }
 
     #[allow(unused_mut)]
-    fn display(&self, _hermes: &hermes::HermesHeader) -> String {
+    fn display<R>(&self, _hermes: &hermes::hermes_file::HermesFile<R>) -> String
+    where R: io::Read + io::BufRead + io::Seek {
 
       let mut display_string = format!("{} ", op_to_str(self.op));
       $(
           display_string = match stringify!($arg) {
             "StringIDUInt8" | "StringIDUInt16" | "StringIDUInt32" => format!("{} \"{}\"", display_string, _hermes.get_string_from_storage_by_index(self.$field as usize)),
             "FunctionIDUInt8" | "FunctionIDUInt16" | "FunctionIDUInt32" => {
+
               let target_function = _hermes.function_headers[self.$field as usize].func_name();
               let func_str = _hermes
                   .get_string_from_storage_by_index(target_function as usize)
@@ -509,7 +515,10 @@ macro_rules! impl_instruction_parser {
         }
       }
 
-      fn display(&self, _hermes: &hermes::HermesHeader) -> String {
+      fn display<R>(&self, _hermes: &hermes::hermes_file::HermesFile<R>) -> String
+      where
+      R: io::Read + io::BufRead + io::Seek
+      {
         match self {
           $(
             Instruction::$insn(insn) => insn.display(_hermes),
@@ -547,7 +556,7 @@ macro_rules! impl_instruction_parser {
 #[macro_export]
 macro_rules! build_instructions {
 ($(($opcode:expr, $instruction:ident, $($operand:ident : $type:ident),*)),*) => {
-
+  use std::io;
     $(define_opcode!($instruction, $($operand : $type),*);)*
 
     #[derive(Debug, Copy)]
@@ -647,7 +656,10 @@ pub enum Instruction {
 }
 
 impl Instruction {
-    pub fn display(&self, _hermes: &HermesHeader) -> String {
+    pub fn display<R>(&self, _hermes: &HermesFile<R>) -> String
+    where
+        R: io::Read + io::BufRead + io::Seek,
+    {
         match self {
             #[cfg(feature = "v89")]
             Instruction::V89(instruction) => instruction.display(_hermes),
