@@ -15,7 +15,7 @@ impl Serializable for ExceptionHandlerInfo {
     type Version = u32;
 
     fn size(&self) -> usize {
-        8
+        12
     }
 
     fn deserialize<R>(r: &mut R, _version: u32) -> Self

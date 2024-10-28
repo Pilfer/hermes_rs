@@ -104,10 +104,9 @@ where
 
     pub fn visit_function_headers(&mut self) {
         for _ in 0..self.header.function_count {
+            let _initpos = self._reader.stream_position().unwrap();
             let sfh = SmallFunctionHeader::deserialize(&mut self._reader, self.header.version);
-
-            // #[allow(clippy::seek_from_current)]
-            let _current_pos = self._reader.stream_position().unwrap();
+            let anchor_pos = _initpos + sfh.size() as u64;
 
             // Check if we're dealing with a Small or Large Function Header.
             // Overflowed = Large Function Header
@@ -121,12 +120,14 @@ where
                     .seek(io::SeekFrom::Start(new_offset as u64))
                     .expect("unable to seek to overflowed function header");
 
-                let lfh = LargeFunctionHeader::deserialize(&mut self._reader, self.header.version);
-                FunctionHeader::Large(lfh.clone())
+                FunctionHeader::Large(LargeFunctionHeader::deserialize(
+                    &mut self._reader,
+                    self.header.version,
+                ))
             };
 
             self._reader
-                .seek(io::SeekFrom::Start(_current_pos))
+                .seek(io::SeekFrom::Start(anchor_pos))
                 .expect("unable to seek to function header");
 
             self.function_headers.push(function_header_val);
@@ -380,8 +381,6 @@ where
             fh.frame_size(),
             fh.env_size()
         );
-
-        // println!("bytecode as hex: {:?}", bytecode_buf);
 
         // #[allow(unused_mut)]
         let mut instructions_list = vec![];

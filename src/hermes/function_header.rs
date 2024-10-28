@@ -61,8 +61,16 @@ impl Serializable for SmallFunctionHeader {
                 0 => FunctionHeaderFlagProhibitions::ProhibitCall,
                 1 => FunctionHeaderFlagProhibitions::ProhibitConstruct,
                 2 => FunctionHeaderFlagProhibitions::ProhibitNone,
+                // Sometimes when a function is overflowed, we might get an incorrect value here
+                // This obviously breaks the match statement, so we just default to ProhibitNone.
+                // The true value will be overwritten in the LargeFunctionHeader.deserialize() call
+                _ if overflowed == 1 => FunctionHeaderFlagProhibitions::ProhibitNone,
                 _ => {
-                    panic!("Unknown prohibit invoke on small function header");
+                    panic!(
+                        "Unknown prohibit invoke on small function header: {:?} at position {:?}",
+                        prohibit_invoke,
+                        r.stream_position().unwrap()
+                    );
                 }
             },
             strict_mode: strict_mode == 1,
@@ -71,22 +79,42 @@ impl Serializable for SmallFunctionHeader {
             overflowed: overflowed == 1,
         };
 
+        // Reading the rest of this if the header is overflowed isn't necessary,
+        // and will just cause an error. So we just return the header here.
+        if overflowed == 1 {
+            return SmallFunctionHeader {
+                offset,
+                param_count,
+                byte_size,
+                func_name,
+                info_offset,
+                frame_size,
+                env_size,
+                highest_read_cache_index,
+                highest_write_cache_index,
+                flags,
+                exception_handlers: vec![],
+                debug_info: None,
+            };
+        }
+
         //
         // https://github.com/facebook/hermes/blob/d964f6b125426f919ad30fb09ff09b9d5f041743/lib/BCGen/HBC/BytecodeDataProvider.cpp#L646
         //
         let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
         if flags.has_exception_handler {
+            r.seek(io::SeekFrom::Start(info_offset as u64)).unwrap();
             align_reader(r, 4).unwrap();
+
             let exception_handler_count = decode_u32(r);
-            // iterate and map exception handlers
             for _ in 0..exception_handler_count {
-                println!("Exception Handler count: {}", exception_handler_count);
                 exception_handlers.push(ExceptionHandlerInfo::deserialize(r, _version));
             }
         }
 
-        let _current_pos = r.stream_position().unwrap();
         let debug_info = if flags.has_debug_info {
+            let _current_pos = r.stream_position().unwrap();
+
             // Go to the debug info offset for this function header to read the debug info
             r.seek(io::SeekFrom::Start(info_offset as u64)).unwrap();
 
@@ -249,7 +277,6 @@ impl Serializable for LargeFunctionHeader {
 
         let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
         if flags.has_exception_handler {
-            // handle exception handlers
             align_reader(r, 4).unwrap();
             let exception_handler_count = decode_u32(r);
             for _ in 0..exception_handler_count {
@@ -257,20 +284,21 @@ impl Serializable for LargeFunctionHeader {
             }
         }
 
-        let _current_pos = r.stream_position().unwrap();
         let debug_info = if flags.has_debug_info {
+            let _current_pos = r.stream_position().unwrap();
+
             // Go to the debug info offset for this function header to read the debug info
             r.seek(io::SeekFrom::Start(info_offset as u64)).unwrap();
+
+            // Read the debug info
             let dio = Some(DebugInfoOffsets::deserialize(r, _version));
+
             // Go back to the original position since we're done reading the debug info
             r.seek(io::SeekFrom::Start(_current_pos)).unwrap();
             dio
         } else {
-            // TODO: Make this a None later.
             None
         };
-
-        println!("Large Debug info: {:#?}", debug_info);
 
         LargeFunctionHeader {
             offset,
