@@ -15,8 +15,9 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
   - [Installation](#installation)
   - [Usage](#usage)
       - [Reading File Header](#reading-file-header)
+      - [Reading Strings](#reading-strings)
       - [Reading Function Headers](#reading-function-headers)
-      - [Parsing Bytecode](#parsing-bytecode)
+      - [Dumping Bytecode](#dumping-bytecode)
       - [Encoding Instructions](#encoding-instructions)
       - [Using specific HBC Versions](#using-specific-hbc-versions)
 - [Hermes Resources](#hermes-resources)
@@ -66,104 +67,162 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
 #### Reading File Header
 
 ```rust
-let f = File::open("./test_file.hbc").expect("no file found");
-let mut reader = io::BufReader::new(f);
-let header: HermesHeader = HermesStruct::deserialize(&mut reader);
+let filename = "./input_data/index.android.bundle";
 
-println!("Header: {:?}", header);
+let f = File::open(filename).expect("no file found");
+let mut reader = io::BufReader::new(f);
+
+let mut hermes_file = HermesFile::deserialize(&mut reader);
+
+println!("{:?}", hermes_file.header);
 ```
 
 Output:
 
 ```go
-{
+HermesHeader {
   magic: 2240826417119764422,
   version: 94,
-  sha1: [ 13, 37, 133, 71, 337, 17, 182, 139, 155, 223, 133, 7, 132, 109, 21, 96, 3, 12, 19, 56],
-  file_length: 1102,
+  sha1: [20, 178, 139, 133, 105, 198, 134, 29, 58, 101, 194, 248, 210, 173, 84, 79, 162, 174, 43, 205],
+  file_length: 11059884,
   global_code_index: 0,
-  function_count: 3,
-  string_kind_count: 2,
-  identifier_count: 5,
-  string_count: 14,
-  overflow_string_count: 0,
-  string_storage_size: 88,
+  function_count: 54483,
+  string_kind_count: 3,
+  identifier_count: 35878,
+  string_count: 65091,
+  overflow_string_count: 425,
+  string_storage_size: 2238216,
   big_int_count: 0,
   big_int_storage_size: 0,
-  reg_exp_count: 0,
-  reg_exp_storage_size: 0,
-  array_buffer_size: 0,
-  obj_key_buffer_size: 0,
-  obj_value_buffer_size: 0,
+  reg_exp_count: 448,
+  reg_exp_storage_size: 49719,
+  array_buffer_size: 132510,
+  obj_key_buffer_size: 43517,
+  obj_value_buffer_size: 137207,
   segment_id: 0,
   cjs_module_count: 0,
-  function_source_count: 0,
-  debug_info_offset: 628,
+  cjs_module_offset: 0,
+  function_source_count: 1361,
+  debug_info_offset: 11059836,
   options: BytecodeOptions {
     static_builtins: false,
     cjs_modules_statically_resolved: false,
     has_async: false,
     flags: false
   },
-  function_headers: [
-    SmallFunctionHeader {
-      offset: 348,
-      param_count: 1,
-      byte_size: 69,
-      func_name: 5,
-      info_offset: 576,
-      frame_size: 15,
-      env_size: 2,
-      highest_read_cache_index: 2,
-      highest_write_cache_index: 0,
-      flags: FunctionHeaderFlag {
-        prohibit_invoke: ProhibitNone,
-        strict_mode: false,
-        has_exception_handler: true,
-        has_debug_info: true, overflowed: false
-        }
-    },
-    // ...
-  ],
-  string_kinds: [
-    StringKindEntry { count: 9, kind: String },
-    StringKindEntry { count: 5, kind: Identifier }
-  ],
-  string_storage: [
-    SmallStringTableEntry { is_utf_16: false, offset: 0, length: 4},
-    // ...
-  ],
-  string_storage_bytes: [ 119, 101, 101, ... ],
-  overflow_string_storage: []
+  _padding: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 }
+```
+
+#### Reading Strings  
+
+```rust
+println!("Strings: {:?}", hermes_file.get_strings());
+```
+
+Output:  
+
+```sh
+Strings: ["$$typeof", "type", "API", "isArray", "Array", ... ]
 ```
 
 #### Reading Function Headers
 
 ```rust
-header.function_headers.iter().for_each(|fh| {
-  println!("function header: {:?}", fh);
-});
+for func in hermes_file.function_headers {
+    println!("{:?}", func);
+}
 
 // Prints the following:
-// function header: SmallFunctionHeader { ... } }
-// ...
+Small(SmallFunctionHeader { offset: 252641, param_count: 3, byte_size: 63, func_name: 5168, info_offset: 842244, frame_size: 16, env_size: 0, highest_read_cache_index: 1, highest_write_cache_index: 0, flags: FunctionHeaderFlag { prohibit_invoke: ProhibitNone, strict_mode: false, has_exception_handler: false, has_debug_info: false, overflowed: false }, exception_handlers: [], debug_info: None })
+Small(LargeFunctionHeader { offset: 252704, param_count: 2, byte_size: 41, func_name: 3756, info_offset: 842244, frame_size: 14, env_size: 0, highest_read_cache_index: 1, highest_write_cache_index: 0, flags: FunctionHeaderFlag { prohibit_invoke: ProhibitNone, strict_mode: false, has_exception_handler: false, has_debug_info: false, overflowed: false }, exception_handlers: [], debug_info: None })
+...
 ```
 
-#### Parsing Bytecode
+#### Dumping Bytecode
+
+**Single Function**
+
+Call `print_bytecode_for_fn(fidx)`, where `fidx` is the function index of the element in `hermes_file.function_headers`.
 
 ```rust
-header.parse_bytecode(&mut reader);
+hermes_file.parse_bytecode_for_fn(1337);
+```
 
-// By default, prints the following. It is assumed that the end user will
-// bring their own functionality to play with the instructions as-needed
+Output:
 
-/*
-Function<foo>(1 params, 1 registers, 0 symbols):
-  LoadConstString  r0,  "bar"
-  AsyncBreakCheck
-  Ret  r0
-*/
+```asm
+Function<setCurrentTarget>(3 params, 11 registers, 0 symbols):
+0x00000000	GetEnvironment  r0,  0
+0x00000001	LoadFromEnvironment  r2,  r0,  6
+0x00000002	LoadConstUndefined  r0
+0x00000003	LoadParam  r1,  1
+0x00000004	Call2  r2,  r2,  r0,  r1
+0x00000005	LoadConstNull  r1
+0x00000006	PutById  r2,  r1,  1,  "currentTarget"
+0x00000007	Ret  r0
+```
+
+**Entire File**  
+
+Printing out the bytecode for the entire executable in a human-readable format is possible by calling `print_bytecode`.  
+
+```rust
+hermes_file.print_bytecode();
+```
+
+Which outputs:  
+
+```smali
+Function<global>(1 params, 19 registers, 0 symbols):
+0x00000000	DeclareGlobalVar  "__BUNDLE_START_TIME__"
+0x00000001	DeclareGlobalVar  "__DEV__"
+0x00000002	DeclareGlobalVar  "process"
+0x00000003	DeclareGlobalVar  "__METRO_GLOBAL_PREFIX__"
+0x00000004	CreateEnvironment  r3
+0x00000005	LoadThisNS  r4
+0x00000006	GetById  r1,  r4,  1,  "nativePerformanceNow"
+0x00000007	GetGlobalObject  r0
+0x00000008	JmpTrue  2L1,  r1
+0x00000009	TryGetById  r2,  r0,  2,  "Date"
+0x0000000A	GetByIdShort  r1,  r2,  3,  "now"
+0x0000000B	Call1  r1,  r1,  r2
+0x0000000C	Jmp  L1
+0x0000000D	TryGetById  r5,  r0,  1,  "nativePerformanceNow"
+    L1:
+0x0000000E	LoadConstUndefined  r2
+0x0000000F	Call1  r1,  r5,  r2
+0x00000010	PutById  r0,  r1,  1,  "__BUNDLE_START_TIME__"
+0x00000011	LoadConstFalse  r1
+0x00000012	PutById  r0,  r1,  2,  "__DEV__"
+0x00000013	GetByIdShort  r1,  r4,  4,  "process"
+0x00000014	JmpTrue  5,  r1
+...
+```
+
+**Raw Bytes**  
+
+In the event that you want to access *just* the raw bytes for a specific function, you can use `hermes_file.get_bytecode()` and iterate.
+The function returns a `Vec<FunctionBytecode>`, which has the function index and bytecode (`Vec<u8>`) pairing.
+
+```rust
+let bc = hermes_file.get_bytecode();
+
+for func in bc {
+  println!("{:?}", func);
+}
+```
+
+Output:  
+
+```sh
+FunctionBytecode { func_index: 0, bytecode: [52, 2, 11, 0, 0, 52, 3, 11, 0, 0, 52, 217, 0, 0, 0, 52, ..<truncated>... ] }
+FunctionBytecode { func_index: 1, bytecode: [50, 2, 108, 8, 1, 42, 2, 0, 8, 100, 7, 2, 2, 0, 100, 4, ..<truncated>... ] }
+FunctionBytecode { func_index: 2, bytecode: [48, 0, 57, 0, 0, 1, 19, 0, 54, 1, 0, 2, 219, 106, 1, 1, ..<truncated>... ] }
+FunctionBytecode { func_index: 3, bytecode: [108, 3, 2, 41, 0, 0, 46, 2, 0, 1, 54, 1, 2, 1, 163, 83, ..<truncated>... ] }
+FunctionBytecode { func_index: 4, bytecode: [108, 3, 1, 41, 0, 0, 46, 2, 0, 1, 54, 1, 2, 1, 47, 83,  ..<truncated>... ] }
+FunctionBytecode { func_index: 5, bytecode: [108, 4, 1, 41, 2, 0, 46, 1, 2, 1, 54, 0, 1, 1, 47, 83,  ..<truncated>... ] }
+FunctionBytecode { func_index: 6, bytecode: [108, 4, 1, 41, 2, 0, 46, 1, 2, 1, 54, 0, 1, 1, 47, 83,  ..<truncated>... ] }
 ```
 
 #### Encoding Instructions
@@ -209,7 +268,7 @@ Example:
 
 ```toml
 [dependencies]
-hermes_rs = { features = ["v89", "v90", "v93", "v94", "v95"] }
+hermes_rs = { features = ["v89", "v90", "v93", "v94", "v95", "v96"] }
 ```
 
 # Hermes Resources
@@ -233,7 +292,10 @@ hermes_rs = { features = ["v89", "v90", "v93", "v94", "v95"] }
 
 ### Supporting new versions of Hermes
 
+This section assumes that only instructions have been modified, and not core parsing logic (struct fields, RegExp bytecode, Debug Info fields, etc). If the latter has a diff, obviously we'll need to implement those changes.  
+
 There is a script in `./def_versions/_gen_macros.js` that reads and parses a Bytecode Definition file passed to it as the first argument and outputs a file containing the macro body to support the updated instructions.
+
 
 ```sh
 # How I generated them
@@ -356,28 +418,3 @@ Finally, add the `feature` (`v100 = []`) to Cargo.toml.
 | RegExpTableEntry         | ✅          | ✅        | ✅   |
 | FunctionHeaderFlag       | ✅          | ❌        | ❌   |
 
-- [x] Parse in the correct order:
-
-```cpp
-// From official Hermes source code
-void visitBytecodeSegmentsInOrder(Visitor &visitor) {
-  // Hermes Header
-  visitor.visitFunctionHeaders();
-  visitor.visitStringKinds();
-  visitor.visitIdentifierHashes();
-  visitor.visitSmallStringTable();
-  visitor.visitOverflowStringTable();
-  visitor.visitStringStorage();
-  visitor.visitArrayBuffer();
-  visitor.visitObjectKeyBuffer();
-  visitor.visitObjectValueBuffer();
-  visitor.visitBigIntTable();
-  visitor.visitBigIntStorage();
-  visitor.visitRegExpTable();
-  visitor.visitRegExpStorage();
-  visitor.visitCJSModuleTable();
-  visitor.visitFunctionSourceTable();
-  // Debug Info (if present)
-  // Footer
-}
-```

@@ -9,7 +9,7 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
-# default = ["v89","v90","v93","v94","v95"]
+# default = ["v89","v90","v93","v94","v95", "v96"]
 default = ["v94", "v95", "v96"]
 v89 = []
 v90 = []

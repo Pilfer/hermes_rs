@@ -17,6 +17,12 @@ use crate::hermes::{Instruction, InstructionParser, Serializable};
 
 use super::{HermesFile, HermesStructReader};
 
+#[derive(Debug)]
+pub struct FunctionBytecode {
+    pub func_index: u32,
+    pub bytecode: Vec<u8>,
+}
+
 impl<R> HermesFile<R>
 where
     R: io::Read + io::BufRead + io::Seek,
@@ -288,10 +294,11 @@ where
     }
 
     /*
-     * Returns the bytecode for each function in the Hermes file. HashMap is indexed by function index.
+     * Returns the bytecode for each function in the Hermes file.
      */
-    pub fn get_bytecode(&mut self) -> HashMap<u32, Vec<u8>> {
-        let mut out = HashMap::new();
+    pub fn get_bytecode(&mut self) -> Vec<FunctionBytecode> {
+        let mut output: Vec<FunctionBytecode> = vec![];
+
         for (idx, _) in self.function_headers.iter().enumerate() {
             let fh = &self.function_headers.get(idx).unwrap();
 
@@ -305,11 +312,13 @@ where
 
             // Read it into the buffer
             self._reader.read_exact(&mut buf).unwrap();
-
-            out.insert(idx as u32, buf);
+            output.push(FunctionBytecode {
+                func_index: idx as u32,
+                bytecode: buf,
+            });
         }
 
-        out
+        output
     }
 
     // ------------------------------------------ //
@@ -618,7 +627,7 @@ where
                         }
 
                         // build_instructions
-                        println!("{}\t{}", byte_index, display_str);
+                        println!("{:#010X}\t{}", byte_index, display_str);
                         let size = ins.size();
                         instructions_list.push(ins);
 
