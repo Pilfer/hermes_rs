@@ -121,9 +121,7 @@ pub fn align_writer<W>(w: &mut W, alignment: usize)
 where
     W: std::io::Write + std::io::Seek,
 {
-    let padding = (alignment
-        - (w.seek(std::io::SeekFrom::Current(0)).unwrap() as usize) % alignment)
-        % alignment;
+    let padding = (alignment - (w.stream_position().unwrap() as usize) % alignment) % alignment;
     for _ in 0..padding {
         encode_u8(w, 0);
     }

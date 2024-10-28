@@ -12,6 +12,23 @@ pub struct BytecodeOptions {
     pub flags: bool,
 }
 
+impl BytecodeOptions {
+    pub fn new() -> Self {
+        Self {
+            static_builtins: false,
+            cjs_modules_statically_resolved: false,
+            has_async: false,
+            flags: false,
+        }
+    }
+}
+
+impl Default for BytecodeOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Serializable for BytecodeOptions {
     type Version = u32;
     /// The size of a BytecodeOptions is 1 byte.  Bitfields are used to store the data.

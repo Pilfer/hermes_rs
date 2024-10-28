@@ -9,6 +9,8 @@ pub struct SmallStringTableEntry {
     pub is_utf_16: bool,
     pub offset: u32,
     pub length: u32,
+    // Before v56 there was an additional "identifier" field, but there's no real reason to support it as of right now.
+    // If someone needs it, raise an issue and provide the bytecode file format and def files.
 }
 
 impl Serializable for SmallStringTableEntry {
@@ -25,6 +27,7 @@ impl Serializable for SmallStringTableEntry {
         let mut string_storage_bytes = [0u8; 4];
         r.read_exact(&mut string_storage_bytes)
             .expect("unable to read string storage bytes");
+
         let is_utf_16 = read_bitfield(&string_storage_bytes, 0, 1);
         let offset = read_bitfield(&string_storage_bytes, 1, 23);
         let length = read_bitfield(&string_storage_bytes, 24, 8);

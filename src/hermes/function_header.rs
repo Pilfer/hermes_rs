@@ -1,8 +1,8 @@
 use std::io;
 
 use crate::hermes::debug_info::DebugInfoOffsets;
-use crate::hermes::decode::{decode_u32, decode_u8, read_bitfield};
-use crate::hermes::encode::write_bitfield;
+use crate::hermes::decode::{align_reader, decode_u32, decode_u8, read_bitfield};
+use crate::hermes::encode::{align_writer, write_bitfield};
 use crate::hermes::exception_handler::ExceptionHandlerInfo;
 use crate::hermes::Serializable;
 
@@ -19,7 +19,7 @@ pub struct SmallFunctionHeader {
     pub highest_write_cache_index: u32,
     pub flags: FunctionHeaderFlag,
     pub exception_handlers: Vec<ExceptionHandlerInfo>,
-    pub debug_info: DebugInfoOffsets,
+    pub debug_info: Option<DebugInfoOffsets>,
 }
 
 impl Serializable for SmallFunctionHeader {
@@ -61,14 +61,71 @@ impl Serializable for SmallFunctionHeader {
                 0 => FunctionHeaderFlagProhibitions::ProhibitCall,
                 1 => FunctionHeaderFlagProhibitions::ProhibitConstruct,
                 2 => FunctionHeaderFlagProhibitions::ProhibitNone,
+                // Sometimes when a function is overflowed, we might get an incorrect value here
+                // This obviously breaks the match statement, so we just default to ProhibitNone.
+                // The true value will be overwritten in the LargeFunctionHeader.deserialize() call
+                _ if overflowed == 1 => FunctionHeaderFlagProhibitions::ProhibitNone,
                 _ => {
-                    panic!("Unknown prohibit invoke on small function header");
+                    panic!(
+                        "Unknown prohibit invoke on small function header: {:?} at position {:?}",
+                        prohibit_invoke,
+                        r.stream_position().unwrap()
+                    );
                 }
             },
             strict_mode: strict_mode == 1,
             has_exception_handler: has_exception_handler == 1,
             has_debug_info: has_debug_info == 1,
             overflowed: overflowed == 1,
+        };
+
+        // Reading the rest of this if the header is overflowed isn't necessary,
+        // and will just cause an error. So we just return the header here.
+        if overflowed == 1 {
+            return SmallFunctionHeader {
+                offset,
+                param_count,
+                byte_size,
+                func_name,
+                info_offset,
+                frame_size,
+                env_size,
+                highest_read_cache_index,
+                highest_write_cache_index,
+                flags,
+                exception_handlers: vec![],
+                debug_info: None,
+            };
+        }
+
+        //
+        // https://github.com/facebook/hermes/blob/d964f6b125426f919ad30fb09ff09b9d5f041743/lib/BCGen/HBC/BytecodeDataProvider.cpp#L646
+        //
+        let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
+        if flags.has_exception_handler {
+            r.seek(io::SeekFrom::Start(info_offset as u64)).unwrap();
+            align_reader(r, 4).unwrap();
+
+            let exception_handler_count = decode_u32(r);
+            for _ in 0..exception_handler_count {
+                exception_handlers.push(ExceptionHandlerInfo::deserialize(r, _version));
+            }
+        }
+
+        let debug_info = if flags.has_debug_info {
+            let _current_pos = r.stream_position().unwrap();
+
+            // Go to the debug info offset for this function header to read the debug info
+            r.seek(io::SeekFrom::Start(info_offset as u64)).unwrap();
+
+            // Read the debug info
+            let dio = Some(DebugInfoOffsets::deserialize(r, _version));
+
+            // Go back to the original position since we're done reading the debug info
+            r.seek(io::SeekFrom::Start(_current_pos)).unwrap();
+            dio
+        } else {
+            None
         };
 
         SmallFunctionHeader {
@@ -82,18 +139,14 @@ impl Serializable for SmallFunctionHeader {
             highest_read_cache_index,
             highest_write_cache_index,
             flags,
-            exception_handlers: vec![],
-            debug_info: DebugInfoOffsets {
-                src: 0,
-                scope_desc: 0,
-                callee: 0,
-            },
+            exception_handlers,
+            debug_info,
         }
     }
 
     fn serialize<W>(&self, w: &mut W)
     where
-        W: io::Write,
+        W: io::Write + io::Seek,
     {
         let mut func_header_bytes = [0u8; 16];
         write_bitfield(&mut func_header_bytes, 0, 25, self.offset);
@@ -129,6 +182,7 @@ impl Serializable for SmallFunctionHeader {
                 write_bitfield(&mut flags_byte, 0, 2, 2)
             }
         }
+
         write_bitfield(&mut flags_byte, 2, 1, self.flags.strict_mode as u32);
         write_bitfield(
             &mut flags_byte,
@@ -143,6 +197,18 @@ impl Serializable for SmallFunctionHeader {
 
         w.write_all(&func_header_bytes)
             .expect("unable to write first word");
+
+        if self.flags.has_exception_handler {
+            align_writer(w, 4);
+            for handler in &self.exception_handlers {
+                handler.serialize(w);
+            }
+        }
+
+        if self.flags.has_debug_info && self.debug_info.is_some() {
+            align_writer(w, 4);
+            self.debug_info.as_ref().unwrap().serialize(w);
+        }
     }
 }
 
@@ -159,7 +225,7 @@ pub struct LargeFunctionHeader {
     pub highest_write_cache_index: u32,
     pub flags: FunctionHeaderFlag,
     pub exception_handlers: Vec<ExceptionHandlerInfo>,
-    pub debug_info: DebugInfoOffsets,
+    pub debug_info: Option<DebugInfoOffsets>,
 }
 
 impl Serializable for LargeFunctionHeader {
@@ -209,6 +275,31 @@ impl Serializable for LargeFunctionHeader {
             overflowed: overflowed == 1,
         };
 
+        let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
+        if flags.has_exception_handler {
+            align_reader(r, 4).unwrap();
+            let exception_handler_count = decode_u32(r);
+            for _ in 0..exception_handler_count {
+                exception_handlers.push(ExceptionHandlerInfo::deserialize(r, _version));
+            }
+        }
+
+        let debug_info = if flags.has_debug_info {
+            let _current_pos = r.stream_position().unwrap();
+
+            // Go to the debug info offset for this function header to read the debug info
+            r.seek(io::SeekFrom::Start(info_offset as u64)).unwrap();
+
+            // Read the debug info
+            let dio = Some(DebugInfoOffsets::deserialize(r, _version));
+
+            // Go back to the original position since we're done reading the debug info
+            r.seek(io::SeekFrom::Start(_current_pos)).unwrap();
+            dio
+        } else {
+            None
+        };
+
         LargeFunctionHeader {
             offset,
             param_count,
@@ -220,18 +311,14 @@ impl Serializable for LargeFunctionHeader {
             highest_read_cache_index: highest_read_cache_index as u32,
             highest_write_cache_index: highest_write_cache_index as u32,
             flags,
-            exception_handlers: vec![],
-            debug_info: DebugInfoOffsets {
-                src: 0,
-                scope_desc: 0,
-                callee: 0,
-            },
+            exception_handlers,
+            debug_info,
         }
     }
 
     fn serialize<W>(&self, w: &mut W)
     where
-        W: io::Write,
+        W: io::Write + io::Seek,
     {
         let mut func_header_bytes = [0u8; 16];
         write_bitfield(&mut func_header_bytes, 0, 25, self.offset);
@@ -281,6 +368,18 @@ impl Serializable for LargeFunctionHeader {
 
         w.write_all(&func_header_bytes)
             .expect("unable to write first word");
+
+        if self.flags.has_exception_handler {
+            align_writer(w, 4);
+            for handler in &self.exception_handlers {
+                handler.serialize(w);
+            }
+        }
+
+        if self.flags.has_debug_info && self.debug_info.is_some() {
+            align_writer(w, 4);
+            self.debug_info.as_ref().unwrap().serialize(w);
+        }
     }
 }
 
@@ -383,7 +482,7 @@ impl FunctionHeader {
         }
     }
 
-    pub fn debug_info(&self) -> DebugInfoOffsets {
+    pub fn debug_info(&self) -> Option<DebugInfoOffsets> {
         match self {
             FunctionHeader::Small(fh) => fh.debug_info.clone(),
             FunctionHeader::Large(fh) => fh.debug_info.clone(),
@@ -400,18 +499,6 @@ impl FunctionHeader {
         }
     }
 
-    pub fn deserialize<R>(r: &mut R, _version: u32) -> Self
-    where
-        R: io::Read + io::BufRead + io::Seek,
-    {
-        let offset = decode_u32(r);
-        if offset & 0x80000000 == 0 {
-            FunctionHeader::Small(SmallFunctionHeader::deserialize(r, _version))
-        } else {
-            FunctionHeader::Large(LargeFunctionHeader::deserialize(r, _version))
-        }
-    }
-
     pub fn size(&self) -> usize {
         match self {
             FunctionHeader::Small(fh) => fh.size(),
@@ -419,7 +506,6 @@ impl FunctionHeader {
         }
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub enum FunctionHeaderFlagProhibitions {
