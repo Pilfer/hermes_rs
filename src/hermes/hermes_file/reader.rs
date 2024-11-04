@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::io;
 
 use crate::hermes::big_int_table::BigIntTableEntry;
+use crate::hermes::debug_info::DebugInfoOffsets;
+use crate::hermes::exception_handler::ExceptionHandlerInfo;
 use crate::hermes::header::HermesHeader;
 
 use crate::hermes::cjs_module::{CJSModule, CJSModuleEntry, CJSModuleInt};
@@ -15,13 +17,7 @@ use crate::hermes::string_kind::StringKindEntry;
 use crate::hermes::string_table::{OverflowStringTableEntry, SmallStringTableEntry};
 use crate::hermes::{Instruction, InstructionParser, Serializable};
 
-use super::{HermesFile, HermesStructReader};
-
-#[derive(Debug)]
-pub struct FunctionBytecode {
-    pub func_index: u32,
-    pub bytecode: Vec<u8>,
-}
+use super::{FunctionBytecode, HermesFile, HermesStructReader};
 
 impl<R> HermesFile<R>
 where
@@ -30,6 +26,14 @@ where
     pub fn new(r: R) -> Self {
         Self {
             _reader: r,
+            offsets: super::HermesOffsets {
+                small_string_table_offsets: HashMap::new(),
+                overflow_string_table_offsets: HashMap::new(),
+                bytecode_offsets: HashMap::new(),
+                debug_info_offset: 0,
+                file_length: 0,
+            },
+            function_bytecode: vec![],
             header: HermesHeader::new(),
             function_headers: vec![],
             string_kinds: vec![],
@@ -117,7 +121,51 @@ where
             // Check if we're dealing with a Small or Large Function Header.
             // Overflowed = Large Function Header
             let function_header_val: FunctionHeader = if !sfh.flags.overflowed {
-                FunctionHeader::Small(sfh)
+                let mut sfh = FunctionHeader::Small(sfh);
+                // if has_exception_handler and debug_info, navigate to infooffset
+                if sfh.flags().has_exception_handler || sfh.flags().has_debug_info {
+                    self._reader
+                        .seek(io::SeekFrom::Start(sfh.info_offset() as u64))
+                        .expect("unable to seek to overflowed function header");
+                }
+
+                // read exception info and debug_info here
+                let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
+                if sfh.flags().has_exception_handler {
+                    align_reader(&mut self._reader, 4).unwrap();
+
+                    let exception_handler_count = decode_u32(&mut self._reader);
+                    for _ in 0..exception_handler_count {
+                        exception_handlers.push(ExceptionHandlerInfo::deserialize(
+                            &mut self._reader,
+                            self.header.version,
+                        ));
+                    }
+                };
+
+                sfh.set_exception_handlers(exception_handlers);
+
+                let debug_info = if sfh.flags().has_debug_info {
+                    let _current_pos = self._reader.stream_position().unwrap();
+
+                    // Read the debug info
+                    let dio = Some(DebugInfoOffsets::deserialize(
+                        &mut self._reader,
+                        self.header.version,
+                    ));
+
+                    // Go back to the original position since we're done reading the debug info
+                    self._reader
+                        .seek(io::SeekFrom::Start(_current_pos))
+                        .unwrap();
+                    dio
+                } else {
+                    None
+                };
+
+                sfh.set_debug_info(debug_info);
+
+                sfh
             } else {
                 let new_offset = sfh.info_offset << 16 | sfh.offset;
 
@@ -126,10 +174,46 @@ where
                     .seek(io::SeekFrom::Start(new_offset as u64))
                     .expect("unable to seek to overflowed function header");
 
-                FunctionHeader::Large(LargeFunctionHeader::deserialize(
+                let mut lfh = FunctionHeader::Large(LargeFunctionHeader::deserialize(
                     &mut self._reader,
                     self.header.version,
-                ))
+                ));
+
+                let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
+                if lfh.flags().has_exception_handler {
+                    align_reader(&mut self._reader, 4).unwrap();
+
+                    let exception_handler_count = decode_u32(&mut self._reader);
+                    for _ in 0..exception_handler_count {
+                        exception_handlers.push(ExceptionHandlerInfo::deserialize(
+                            &mut self._reader,
+                            self.header.version,
+                        ));
+                    }
+                };
+
+                lfh.set_exception_handlers(exception_handlers);
+
+                let debug_info = if lfh.flags().has_debug_info {
+                    let _current_pos = self._reader.stream_position().unwrap();
+
+                    // Read the debug info
+                    let dio = Some(DebugInfoOffsets::deserialize(
+                        &mut self._reader,
+                        self.header.version,
+                    ));
+
+                    // Go back to the original position since we're done reading the debug info
+                    self._reader
+                        .seek(io::SeekFrom::Start(_current_pos))
+                        .unwrap();
+                    dio
+                } else {
+                    None
+                };
+
+                lfh.set_debug_info(debug_info);
+                lfh
             };
 
             self._reader
@@ -507,11 +591,14 @@ where
                     .seek(io::SeekFrom::Start(fh.offset() as u64))
                     .unwrap();
                 let mut bytecode_buf = vec![0u8; fh.byte_size() as usize];
+
                 self._reader
                     .read_exact(&mut bytecode_buf)
                     .expect("unable to read first functions bytecode");
 
-                let myfunc = self.string_storage.get(fh.func_name() as usize).unwrap();
+                let func_name_idx = fh.func_name() as usize;
+
+                let myfunc = self.string_storage.get(func_name_idx).unwrap();
                 println!("------------------------------------------------");
                 let func_start = myfunc.offset;
                 let mut func_name = String::from_utf8(
@@ -532,8 +619,6 @@ where
                     fh.frame_size(),
                     fh.env_size()
                 );
-
-                // println!("bytecode as hex: {:?}", bytecode_buf);
 
                 // #[allow(unused_mut)]
                 let mut instructions_list = vec![];
@@ -628,7 +713,7 @@ where
 
                         // build_instructions
                         println!("{:#010X}\t{}", byte_index, display_str);
-                        let size = ins.size();
+                        let size = ins.size() - 1; // Have to subtract - 1 for the opcode
                         instructions_list.push(ins);
 
                         index += size + 1;

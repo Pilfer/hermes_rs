@@ -123,6 +123,7 @@ impl Serializable for DebugInfo {
         for entry in &self.string_table {
             entry.serialize(w);
         }
+
         w.write_all(&self.string_storage).unwrap();
         for entry in &self.file_regions {
             entry.serialize(w);
@@ -206,6 +207,9 @@ impl Serializable for DebugInfoOffsetsNew {
         W: io::Write,
     {
         // encode_u32(w, self.string_data_off);
+        encode_u32(_w, self.src);
+        encode_u32(_w, self.scope_desc);
+        encode_u32(_w, self.callee);
     }
 }
 
@@ -218,7 +222,7 @@ pub struct DebugInfoOffsetsOld {
 impl Serializable for DebugInfoOffsetsOld {
     type Version = u32;
     fn size(&self) -> usize {
-        12
+        8
     }
 
     fn deserialize<R>(r: &mut R, _version: u32) -> Self

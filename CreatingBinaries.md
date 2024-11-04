@@ -1,3 +1,15 @@
+## Creating Hermes Binaries  
+
+Every Hermes executable file has a header, a bytecode section, an optional debug info section, and a footer that is a sha1 hash of all bytes preceeding it.  
+
+Using `hermes_rs`, you can create functional binaries from scratch.  
+
+The example below demonstrates how to create a basic executable, add two functions with custom instructions, and a few strings.
+
+The file *should* be executable by the official hermes runtime - just make sure the header version matches the runtime version.  
+
+
+```rust
 use hermes_rs::debug_info::{
     DebugFileRegion, DebugInfo, DebugInfoHeader, DebugInfoOffsets, DebugInfoOffsetsNew,
 };
@@ -17,22 +29,25 @@ fn main() {
     let bytebuff = vec![];
     let mut hermes_file = HermesFile::new(io::BufReader::new(Cursor::new(bytebuff)));
 
-    // identical to the old version, sans bytecode fields it looks like.
+    // Create the header.
     hermes_file.header = HermesHeader {
-        magic: 2240826417119764422,
-        version: 96,
+        magic: 2240826417119764422, // Should never change
+        version: 96, // Pick an appropriate Hermes version
+        // This can be 20 bytes of anything. It's a sha1 of the source hash.
+        // Since you're  (probably) reverse engineering a Hermes app, you 
+        // probably won't know this. It isn't important.
         sha1: [
             169, 124, 131, 2, 218, 185, 11, 236, 113, 132, 169, 24, 59, 34, 180, 59, 173, 213, 122,
             101,
         ],
-        file_length: 1337,
+        file_length: 1337,    // Gets updated later
         global_code_index: 0,
-        function_count: 1,
-        string_kind_count: 1,
+        function_count: 0,    // Gets updated with use of hermes_file.add_function(...)
+        string_kind_count: 1, 
         identifier_count: 0,
-        string_count: 2,
+        string_count: 2,      // Gets updated with use of hermes_file.set_strings(...)
         overflow_string_count: 0,
-        string_storage_size: 17,
+        string_storage_size: 17, // Gets updated with use of hermes_file.set_strings(...)
         big_int_count: 0,
         big_int_storage_size: 0,
         reg_exp_count: 0,
@@ -54,6 +69,7 @@ fn main() {
         _padding: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     };
 
+    // Set the strings section for this executable. It also updates the string counts etc.
     hermes_file.set_strings(vec![
         "global".to_string(),
         "print(123);".to_string(),
@@ -61,7 +77,9 @@ fn main() {
     ]);
 
     // Create a function with a large highest_write_cache_index to overflow it
-    // This will be a LargeFunctionHeader during serialization.
+    // This will be a LargeFunctionHeader during serialization, which means
+    // it'll write a SmallFunctionHeader to the function headers section, then the
+    // real LargeFunctionHeader in the DebugInfo section.
     hermes_file.add_function(
         &mut FunctionHeader::Small(SmallFunctionHeader {
             offset: 0,
@@ -81,12 +99,14 @@ fn main() {
                 overflowed: false,
             },
             exception_handlers: vec![],
+            // debug_info is entirely optional
             debug_info: Some(DebugInfoOffsets::New(DebugInfoOffsetsNew {
                 src: 1,
                 scope_desc: 2,
                 callee: 3,
             })),
         }),
+        // Define the actual code for this function.
         &mut define_instructions!(
             hermes_rs::v96,
             LoadConstString { r0: 0, p0: 1 }, // load the string "print(123);" into r0
@@ -107,7 +127,8 @@ fn main() {
         .unwrap(),
     );
 
-    // Create a second function that'll end up being a SmallFunctionHeader
+    // Create a second function that'll end up being a SmallFunctionHeader as it
+    // doesn't have any header values that overflow the bitfield storage
     hermes_file.add_function(
         &mut FunctionHeader::Small(SmallFunctionHeader {
             offset: 0,
@@ -144,12 +165,13 @@ fn main() {
         .unwrap(),
     );
 
+    // Add a StringKind
     hermes_file.string_kinds = vec![hermes_rs::StringKindEntry::New(StringKindEntryNew {
         count: hermes_file.string_storage.len() as u32,
         kind: hermes_rs::StringKind::String,
     })];
 
-    // create DebugInfo struct
+    // Create and add a DebugInfo struct 
     let debug_info: DebugInfo = DebugInfo {
         header: DebugInfoHeader {
             filename_count: 1,
@@ -176,22 +198,30 @@ fn main() {
         string_table_storage: vec![],
     };
 
+    // Assign it
     hermes_file.debug_info = debug_info;
+
+    // Assign debug info strings
     hermes_file.set_debug_strings(vec!["yes.js".to_string()]);
 
+    // Create a writer that we can write to (and seek within)
     let mut writer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
 
+    // Serialize the structure to binary format
     hermes_file.serialize(&mut writer);
 
-    // write the new bytecode to the file
+    // Create out output file
     let mut file = File::create("out.hbc").expect("unable to create file");
 
     writer
         .seek(SeekFrom::Start(0))
         .expect("unable to seek to start");
-
+      
+    // Write it to a file
     file.write_all(&writer.bytes().map(|b| b.unwrap()).collect::<Vec<u8>>())
         .expect("unable to write to file");
 
-    println!("File 'out.hbc' was created.");
+    println!("File 'out.hbc' was created. Execute it with hermes ./out.hbc");
 }
+
+```

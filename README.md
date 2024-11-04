@@ -19,11 +19,11 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
       - [Reading Function Headers](#reading-function-headers)
       - [Dumping Bytecode](#dumping-bytecode)
       - [Encoding Instructions](#encoding-instructions)
+      - [Creating Binaries From Scratch](#creating-binaries-from-scratch)
       - [Using specific HBC Versions](#using-specific-hbc-versions)
 - [Hermes Resources](#hermes-resources)
 - [Development](#development)
     - [Supporting new versions of Hermes](#supporting-new-versions-of-hermes)
-  - [TODO](#todo)
 
 ### Supported HBC Versions
 
@@ -35,6 +35,14 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
 | 94          | ✅           | ✅                 | ❌                  | ❌         |
 | 95          | ✅           | ✅                 | ❌                  | ❌         |
 | 96          | ✅           | ✅                 | ❌                  | ❌         |
+
+A couple of features are missing currently, as they're low priority for me at the moment.
+
+- Regular Expression deserialization and serialization*  
+- Debug Info  deserialization and serialization*  
+
+\* _Supports u8 buffer for manual population_  
+
 
 #### Project Goals
 
@@ -258,6 +266,10 @@ for instr in instructions {
 assert!(writer == vec![115, 0, 1, 0, 94, 0, 0, 0, 92, 0], "Bytecode is incorrect!");
 ```
 
+#### Creating Binaries From Scratch  
+
+Take a look at the [Creating Binaries](./CreatingBinaries.md) example.
+
 #### Using specific HBC Versions
 
 Want to use a specific version of the Hermes bytecode and reduce your binary size?
@@ -278,13 +290,13 @@ hermes_rs = { features = ["v89", "v90", "v93", "v94", "v95", "v96"] }
 - **Github\.io Page**: https://pilfer.github.io/mobile-reverse-engineering/react-native/  
 
 **Other Resources**  
-- **Official docs**: https://hermesengine.dev/
-  - Source: https://github.com/facebook/hermes
-- **hermes-dec** disassembler/decompiler:
-  - https://github.com/P1sec/hermes-dec
-  - Opcode Docs: https://p1sec.github.io/hermes-dec/opcodes_table.html
-- **hbctool**: https://github.com/bongtrop/hbctool
-- **hasmer** (stale): https://github.com/lucasbaizer2/hasmer
+- **Official docs**: https://hermesengine.dev/  
+  - Source: https://github.com/facebook/hermes  
+- **hermes-dec** disassembler/decompiler:  
+  - https://github.com/P1sec/hermes-dec  
+  - Opcode Docs: https://p1sec.github.io/hermes-dec/opcodes_table.html  
+- **hbctool**: https://github.com/bongtrop/hbctool  
+- **hasmer**: https://github.com/lucasbaizer2/hasmer  
 
 ---
 
@@ -392,29 +404,4 @@ let ins_obj: Option<Instruction> = match self.version {
 ```
 
 Finally, add the `feature` (`v100 = []`) to Cargo.toml.
-
----
-
-## TODO
-- [X] DebugInfo definition stuff  
-- [ ] Add comments  
-- [ ] Add docs  
-- [ ] `Serializer` implementations for everything    
-
-| Struct                   | Deserialize | Serialize | Size |
-| ------------------------ | ----------- | --------- | ---- |
-| HermesHeader             | ✅          | ✅        | ✅   |
-| SmallFunctionHeader      | ✅          | ✅        | ✅   |
-| FunctionHeader           | ✅          | ✅        | ✅   |
-| StringKindEntry          | ✅          | ✅        | ✅   |
-| SmallStringTableEntry    | ✅          | ✅        | ✅   |
-| OverflowStringTableEntry | ✅          | ✅        | ✅   |
-| BigIntTableEntry         | ✅          | ✅        | ✅   |
-| BytecodeOptions          | ✅          | ✅        | ✅   |
-| DebugInfoOffsets         | ✅          | ✅        | ✅   |
-| DebugInfoHeader          | ✅          | ✅        | ✅   |
-| DebugFileRegion          | ✅          | ✅        | ✅   |
-| ExceptionHandlerInfo     | ✅          | ✅        | ✅   |
-| RegExpTableEntry         | ✅          | ✅        | ✅   |
-| FunctionHeaderFlag       | ✅          | ❌        | ❌   |
 

@@ -1,10 +1,25 @@
-use std::io;
+use std::{io, vec};
 
 use crate::hermes::debug_info::DebugInfoOffsets;
-use crate::hermes::decode::{align_reader, decode_u32, decode_u8, read_bitfield};
-use crate::hermes::encode::{align_writer, write_bitfield};
+use crate::hermes::decode::{decode_u32, decode_u8, read_bitfield};
+use crate::hermes::encode::{align_writer, encode_u32, encode_u8, write_bitfield};
 use crate::hermes::exception_handler::ExceptionHandlerInfo;
 use crate::hermes::Serializable;
+
+// For deserializing
+pub fn get_large_info_offset(offset: u32, info_offset: u32) -> u32 {
+    (info_offset << 16) | (offset & 0xffff)
+}
+
+// Returns offset and info_offset to populate into a SmallFunctionHeader.
+// Essentially splits the value of the overflowed header offset into two variables.
+// This is used for serializing.
+pub fn get_large_info_offset_pair(real_large_info_offset: u32) -> (u32, u32) {
+    (
+        real_large_info_offset & 0xffff,
+        real_large_info_offset >> 16,
+    )
+}
 
 #[derive(Debug, Clone)]
 pub struct SmallFunctionHeader {
@@ -22,9 +37,67 @@ pub struct SmallFunctionHeader {
     pub debug_info: Option<DebugInfoOffsets>,
 }
 
+impl SmallFunctionHeader {
+    pub fn new() -> Self {
+        SmallFunctionHeader {
+            offset: 0,
+            param_count: 0,
+            byte_size: 0,
+            func_name: 0,
+            info_offset: 0,
+            frame_size: 0,
+            env_size: 0,
+            highest_read_cache_index: 0,
+            highest_write_cache_index: 0,
+            flags: FunctionHeaderFlag {
+                prohibit_invoke: FunctionHeaderFlagProhibitions::ProhibitNone,
+                strict_mode: false,
+                has_exception_handler: false,
+                has_debug_info: false,
+                overflowed: false,
+            },
+            exception_handlers: vec![],
+            debug_info: None,
+        }
+    }
+
+    pub fn set_size(&mut self, new_size: u32) {
+        self.byte_size = new_size;
+    }
+
+    pub fn is_overflowed_check(&self) -> bool {
+        let is_overflowed = |value: u32| -> bool { value > (1 << 17) - 1 };
+        is_overflowed(self.offset)
+            || is_overflowed(self.param_count)
+            || is_overflowed(self.byte_size)
+            || is_overflowed(self.func_name)
+            || is_overflowed(self.info_offset)
+            || is_overflowed(self.frame_size)
+            || is_overflowed(self.env_size)
+            || is_overflowed(self.highest_read_cache_index)
+            || is_overflowed(self.highest_write_cache_index)
+    }
+}
+
+impl Default for SmallFunctionHeader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Serializable for SmallFunctionHeader {
     type Version = u32;
     fn size(&self) -> usize {
+        // let mut size: usize = 16; // base size
+        // if self.flags.has_exception_handler {
+        //     size += self.exception_handlers.first().as_ref().unwrap().size()
+        //         * self.exception_handlers.len();
+        // }
+
+        // if self.flags.has_debug_info {
+        //     size += self.debug_info.as_ref().unwrap().size();
+        // }
+        // size
         16
     }
 
@@ -98,36 +171,6 @@ impl Serializable for SmallFunctionHeader {
             };
         }
 
-        //
-        // https://github.com/facebook/hermes/blob/d964f6b125426f919ad30fb09ff09b9d5f041743/lib/BCGen/HBC/BytecodeDataProvider.cpp#L646
-        //
-        let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
-        if flags.has_exception_handler {
-            r.seek(io::SeekFrom::Start(info_offset as u64)).unwrap();
-            align_reader(r, 4).unwrap();
-
-            let exception_handler_count = decode_u32(r);
-            for _ in 0..exception_handler_count {
-                exception_handlers.push(ExceptionHandlerInfo::deserialize(r, _version));
-            }
-        }
-
-        let debug_info = if flags.has_debug_info {
-            let _current_pos = r.stream_position().unwrap();
-
-            // Go to the debug info offset for this function header to read the debug info
-            r.seek(io::SeekFrom::Start(info_offset as u64)).unwrap();
-
-            // Read the debug info
-            let dio = Some(DebugInfoOffsets::deserialize(r, _version));
-
-            // Go back to the original position since we're done reading the debug info
-            r.seek(io::SeekFrom::Start(_current_pos)).unwrap();
-            dio
-        } else {
-            None
-        };
-
         SmallFunctionHeader {
             offset,
             param_count,
@@ -139,8 +182,8 @@ impl Serializable for SmallFunctionHeader {
             highest_read_cache_index,
             highest_write_cache_index,
             flags,
-            exception_handlers,
-            debug_info,
+            exception_handlers: vec![],
+            debug_info: None,
         }
     }
 
@@ -149,6 +192,7 @@ impl Serializable for SmallFunctionHeader {
         W: io::Write + io::Seek,
     {
         let mut func_header_bytes = [0u8; 16];
+
         write_bitfield(&mut func_header_bytes, 0, 25, self.offset);
         write_bitfield(&mut func_header_bytes, 25, 7, self.param_count);
         write_bitfield(&mut func_header_bytes, 32, 15, self.byte_size);
@@ -197,18 +241,6 @@ impl Serializable for SmallFunctionHeader {
 
         w.write_all(&func_header_bytes)
             .expect("unable to write first word");
-
-        if self.flags.has_exception_handler {
-            align_writer(w, 4);
-            for handler in &self.exception_handlers {
-                handler.serialize(w);
-            }
-        }
-
-        if self.flags.has_debug_info && self.debug_info.is_some() {
-            align_writer(w, 4);
-            self.debug_info.as_ref().unwrap().serialize(w);
-        }
     }
 }
 
@@ -228,9 +260,107 @@ pub struct LargeFunctionHeader {
     pub debug_info: Option<DebugInfoOffsets>,
 }
 
+impl LargeFunctionHeader {
+    pub fn new() -> Self {
+        LargeFunctionHeader {
+            offset: 0,
+            param_count: 0,
+            byte_size: 0,
+            func_name: 0,
+            info_offset: 0,
+            frame_size: 0,
+            env_size: 0,
+            highest_read_cache_index: 0,
+            highest_write_cache_index: 0,
+            flags: FunctionHeaderFlag {
+                prohibit_invoke: FunctionHeaderFlagProhibitions::ProhibitNone,
+                strict_mode: false,
+                has_exception_handler: false,
+                has_debug_info: false,
+                overflowed: false,
+            },
+            exception_handlers: vec![],
+            debug_info: None,
+        }
+    }
+
+    pub fn set_size(&mut self, new_size: u32) {
+        self.byte_size = new_size;
+    }
+
+    pub fn is_overflowed_check(&self) -> bool {
+        let is_overflowed = |value: u32| -> bool { value > (1 << 17) - 1 };
+        is_overflowed(self.offset)
+            || is_overflowed(self.param_count)
+            || is_overflowed(self.byte_size)
+            || is_overflowed(self.func_name)
+            || is_overflowed(self.info_offset)
+            || is_overflowed(self.frame_size)
+            || is_overflowed(self.env_size)
+            || is_overflowed(self.highest_read_cache_index)
+            || is_overflowed(self.highest_write_cache_index)
+    }
+}
+
+impl Default for LargeFunctionHeader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl From<LargeFunctionHeader> for SmallFunctionHeader {
+    fn from(lfh: LargeFunctionHeader) -> Self {
+        let (calculated_offset, calculated_info_offset) =
+            get_large_info_offset_pair(lfh.info_offset);
+        SmallFunctionHeader {
+            // offset: lfh.offset,
+            offset: calculated_offset,
+            param_count: lfh.param_count,
+            byte_size: lfh.byte_size,
+            func_name: lfh.func_name,
+            // info_offset: lfh.info_offset,
+            info_offset: calculated_info_offset,
+            frame_size: lfh.frame_size,
+            env_size: lfh.env_size,
+            highest_read_cache_index: lfh.highest_read_cache_index,
+            highest_write_cache_index: lfh.highest_write_cache_index,
+            flags: lfh.flags,
+            exception_handlers: lfh.exception_handlers,
+            debug_info: lfh.debug_info,
+        }
+    }
+}
+
+impl From<SmallFunctionHeader> for LargeFunctionHeader {
+    fn from(sfh: SmallFunctionHeader) -> Self {
+        LargeFunctionHeader {
+            offset: sfh.offset,
+            param_count: sfh.param_count,
+            byte_size: sfh.byte_size,
+            func_name: sfh.func_name,
+            info_offset: sfh.info_offset,
+            frame_size: sfh.frame_size,
+            env_size: sfh.env_size,
+            highest_read_cache_index: sfh.highest_read_cache_index,
+            highest_write_cache_index: sfh.highest_write_cache_index,
+            flags: sfh.flags,
+            exception_handlers: sfh.exception_handlers,
+            debug_info: sfh.debug_info,
+        }
+    }
+}
+
 impl Serializable for LargeFunctionHeader {
     type Version = u32;
     fn size(&self) -> usize {
+        // let mut size = 32; // base size
+        // if self.flags.has_exception_handler {
+        //     size += self.exception_handlers.first().as_ref().unwrap().size()
+        //         * self.exception_handlers.len();
+        // }
+        // if self.flags.has_debug_info {
+        //     size += self.debug_info.as_ref().unwrap().size();
+        // }
+        // size
         32
     }
 
@@ -238,15 +368,19 @@ impl Serializable for LargeFunctionHeader {
     where
         R: io::Read + io::BufRead + io::Seek,
     {
+        // 4
         let offset = decode_u32(r);
         let param_count = decode_u32(r);
 
+        // 8
         let byte_size = decode_u32(r);
         let func_name = decode_u32(r);
 
+        // 12
         let info_offset = decode_u32(r);
         let frame_size = decode_u32(r);
 
+        // 16
         let env_size = decode_u32(r); // 28
         let highest_read_cache_index = decode_u8(r);
         let highest_write_cache_index = decode_u8(r); // 30
@@ -275,31 +409,6 @@ impl Serializable for LargeFunctionHeader {
             overflowed: overflowed == 1,
         };
 
-        let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
-        if flags.has_exception_handler {
-            align_reader(r, 4).unwrap();
-            let exception_handler_count = decode_u32(r);
-            for _ in 0..exception_handler_count {
-                exception_handlers.push(ExceptionHandlerInfo::deserialize(r, _version));
-            }
-        }
-
-        let debug_info = if flags.has_debug_info {
-            let _current_pos = r.stream_position().unwrap();
-
-            // Go to the debug info offset for this function header to read the debug info
-            r.seek(io::SeekFrom::Start(info_offset as u64)).unwrap();
-
-            // Read the debug info
-            let dio = Some(DebugInfoOffsets::deserialize(r, _version));
-
-            // Go back to the original position since we're done reading the debug info
-            r.seek(io::SeekFrom::Start(_current_pos)).unwrap();
-            dio
-        } else {
-            None
-        };
-
         LargeFunctionHeader {
             offset,
             param_count,
@@ -311,8 +420,8 @@ impl Serializable for LargeFunctionHeader {
             highest_read_cache_index: highest_read_cache_index as u32,
             highest_write_cache_index: highest_write_cache_index as u32,
             flags,
-            exception_handlers,
-            debug_info,
+            exception_handlers: vec![],
+            debug_info: None,
         }
     }
 
@@ -320,54 +429,41 @@ impl Serializable for LargeFunctionHeader {
     where
         W: io::Write + io::Seek,
     {
-        let mut func_header_bytes = [0u8; 16];
-        write_bitfield(&mut func_header_bytes, 0, 25, self.offset);
-        write_bitfield(&mut func_header_bytes, 25, 7, self.param_count);
-        write_bitfield(&mut func_header_bytes, 32, 15, self.byte_size);
-        write_bitfield(&mut func_header_bytes, 47, 17, self.func_name);
-        write_bitfield(&mut func_header_bytes, 64, 25, self.info_offset);
-        write_bitfield(&mut func_header_bytes, 89, 7, self.frame_size);
-        write_bitfield(&mut func_header_bytes, 96, 8, self.env_size);
-        write_bitfield(
-            &mut func_header_bytes,
-            104,
-            8,
-            self.highest_read_cache_index,
-        );
-        write_bitfield(
-            &mut func_header_bytes,
-            112,
-            8,
-            self.highest_write_cache_index,
-        );
+        // assert!(1 == 2, "Do a check here to see if self.func_name overflows");
+        // let mut func_header_bytes = [0u8; 32];
+
+        encode_u32(w, self.offset);
+        encode_u32(w, self.param_count);
+        encode_u32(w, self.byte_size);
+        encode_u32(w, self.func_name);
+        encode_u32(w, self.info_offset);
+        encode_u32(w, self.frame_size);
+        encode_u32(w, self.env_size);
+        encode_u8(w, self.highest_read_cache_index as u8);
+        encode_u8(w, self.highest_write_cache_index as u8);
 
         // last byte for flags
-        let mut flags_byte = [0u8];
+        let mut flag_byte = [0u8];
         match self.flags.prohibit_invoke {
-            FunctionHeaderFlagProhibitions::ProhibitCall => {
-                write_bitfield(&mut flags_byte, 0, 2, 0)
-            }
+            FunctionHeaderFlagProhibitions::ProhibitCall => write_bitfield(&mut flag_byte, 0, 2, 0),
             FunctionHeaderFlagProhibitions::ProhibitConstruct => {
-                write_bitfield(&mut flags_byte, 0, 2, 1)
+                write_bitfield(&mut flag_byte, 0, 2, 1)
             }
-            FunctionHeaderFlagProhibitions::ProhibitNone => {
-                write_bitfield(&mut flags_byte, 0, 2, 2)
-            }
+            FunctionHeaderFlagProhibitions::ProhibitNone => write_bitfield(&mut flag_byte, 0, 2, 2),
         }
-        write_bitfield(&mut flags_byte, 2, 1, self.flags.strict_mode as u32);
+        write_bitfield(&mut flag_byte, 2, 1, self.flags.strict_mode as u32);
         write_bitfield(
-            &mut flags_byte,
+            &mut flag_byte,
             3,
             1,
             self.flags.has_exception_handler as u32,
         );
-        write_bitfield(&mut flags_byte, 4, 1, self.flags.has_debug_info as u32);
-        write_bitfield(&mut flags_byte, 5, 1, self.flags.overflowed as u32);
+        write_bitfield(&mut flag_byte, 4, 1, self.flags.has_debug_info as u32);
+        write_bitfield(&mut flag_byte, 5, 1, self.flags.overflowed as u32);
 
-        func_header_bytes[15] = flags_byte[0];
+        // func_header_bytes[15] = flags_byte[0];
 
-        w.write_all(&func_header_bytes)
-            .expect("unable to write first word");
+        w.write_all(&flag_byte).expect("unable to write first word");
 
         if self.flags.has_exception_handler {
             align_writer(w, 4);
@@ -412,6 +508,20 @@ impl FunctionHeader {
         }
     }
 
+    pub fn set_offset(&mut self, new_offset: u32) {
+        match self {
+            FunctionHeader::Small(fh) => fh.offset = new_offset,
+            FunctionHeader::Large(fh) => fh.offset = new_offset,
+        }
+    }
+
+    pub fn set_size(&mut self, byte_size: u32) {
+        match self {
+            FunctionHeader::Small(fh) => fh.byte_size = byte_size,
+            FunctionHeader::Large(fh) => fh.byte_size = byte_size,
+        }
+    }
+
     pub fn param_count(&self) -> u32 {
         match self {
             FunctionHeader::Small(fh) => fh.param_count,
@@ -426,6 +536,13 @@ impl FunctionHeader {
         }
     }
 
+    pub fn set_byte_size(&mut self, new_size: u32) {
+        match self {
+            FunctionHeader::Small(fh) => fh.byte_size = new_size,
+            FunctionHeader::Large(fh) => fh.byte_size = new_size,
+        };
+    }
+
     pub fn func_name(&self) -> u32 {
         match self {
             FunctionHeader::Small(fh) => fh.func_name,
@@ -433,6 +550,12 @@ impl FunctionHeader {
         }
     }
 
+    pub fn set_info_offset(&mut self, offset: u32) {
+        match self {
+            FunctionHeader::Small(fh) => fh.info_offset = offset,
+            FunctionHeader::Large(fh) => fh.info_offset = offset,
+        }
+    }
     pub fn info_offset(&self) -> u32 {
         match self {
             FunctionHeader::Small(fh) => fh.info_offset,
@@ -475,6 +598,13 @@ impl FunctionHeader {
         }
     }
 
+    pub fn set_overflowed(&mut self, overflowed: bool) {
+        match self {
+            FunctionHeader::Small(fh) => fh.flags.overflowed = overflowed,
+            FunctionHeader::Large(fh) => fh.flags.overflowed = overflowed,
+        }
+    }
+
     pub fn exception_handlers(&self) -> Vec<ExceptionHandlerInfo> {
         match self {
             FunctionHeader::Small(fh) => fh.exception_handlers.clone(),
@@ -482,10 +612,24 @@ impl FunctionHeader {
         }
     }
 
+    pub fn set_exception_handlers(&mut self, new_handlers: Vec<ExceptionHandlerInfo>) {
+        match self {
+            FunctionHeader::Small(fh) => fh.exception_handlers = new_handlers,
+            FunctionHeader::Large(fh) => fh.exception_handlers = new_handlers,
+        }
+    }
+
     pub fn debug_info(&self) -> Option<DebugInfoOffsets> {
         match self {
             FunctionHeader::Small(fh) => fh.debug_info.clone(),
             FunctionHeader::Large(fh) => fh.debug_info.clone(),
+        }
+    }
+
+    pub fn set_debug_info(&mut self, new_debug_info: Option<DebugInfoOffsets>) {
+        match self {
+            FunctionHeader::Small(fh) => fh.debug_info = new_debug_info,
+            FunctionHeader::Large(fh) => fh.debug_info = new_debug_info,
         }
     }
 
@@ -503,6 +647,13 @@ impl FunctionHeader {
         match self {
             FunctionHeader::Small(fh) => fh.size(),
             FunctionHeader::Large(fh) => fh.size(),
+        }
+    }
+
+    pub fn is_overflowed_check(&mut self) -> bool {
+        match self {
+            FunctionHeader::Small(fh) => fh.is_overflowed_check(),
+            FunctionHeader::Large(fh) => fh.is_overflowed_check(),
         }
     }
 }

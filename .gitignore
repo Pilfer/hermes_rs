@@ -11,3 +11,4 @@ obsidian-out
 **/gen.rs
 docs
 TODO.md
+*.hexpat

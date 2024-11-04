@@ -309,6 +309,7 @@ macro_rules! define_opcode {
     }
   }
 
+
   impl hermes::InstructionParser for $name {
     fn deserialize<R>(_r: &mut R, op: u8) -> Self
     where
@@ -412,6 +413,7 @@ macro_rules! define_opcode {
     #[allow(unused_mut)]
     fn size(&self) -> usize {
       let mut total_size = 0;
+      total_size += 1; // opcode
       $(
         total_size += map_size!($arg);
       )*
@@ -769,6 +771,52 @@ impl Instruction {
     }
 }
 
+pub trait IntoParentInstruction {
+    fn into_parent(self) -> Instruction;
+}
+
+#[cfg(feature = "v89")]
+impl IntoParentInstruction for v89::Instruction {
+    fn into_parent(self) -> Instruction {
+        Instruction::V89(self)
+    }
+}
+
+#[cfg(feature = "v90")]
+impl IntoParentInstruction for v90::Instruction {
+    fn into_parent(self) -> Instruction {
+        Instruction::V90(self)
+    }
+}
+
+#[cfg(feature = "v93")]
+impl IntoParentInstruction for v93::Instruction {
+    fn into_parent(self) -> Instruction {
+        Instruction::V93(self)
+    }
+}
+
+#[cfg(feature = "v94")]
+impl IntoParentInstruction for v94::Instruction {
+    fn into_parent(self) -> Instruction {
+        Instruction::V94(self)
+    }
+}
+
+#[cfg(feature = "v95")]
+impl IntoParentInstruction for v95::Instruction {
+    fn into_parent(self) -> Instruction {
+        Instruction::V95(self)
+    }
+}
+
+#[cfg(feature = "v96")]
+impl IntoParentInstruction for v96::Instruction {
+    fn into_parent(self) -> Instruction {
+        Instruction::V96(self)
+    }
+}
+
 pub trait Serializable {
     type Version;
 
@@ -808,18 +856,16 @@ macro_rules! define_instructions {
   ($version:path, $($instr:ident { $($field:ident: $value:expr),* }),* $(,)?) => {
       {
           use $version::{str_to_op, Instruction};
-          use $version::{ $(
-              $instr,
-          )* };
+          use $version::*;
 
           Some(vec![
-              $(
-                  Instruction::$instr ($instr{
-                      op: str_to_op(stringify!($instr)),
-                      $($field: $value),*
-                  }),
-              )*
-          ])
+            $(
+                Instruction::$instr ($instr{
+                    op: str_to_op(stringify!($instr)),
+                    $($field: $value),*
+                }),
+            )*
+        ])
       }
   };
 }
