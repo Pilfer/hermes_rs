@@ -4,6 +4,8 @@ use crate::hermes::decode::decode_u8;
 use crate::hermes::encode::encode_u8;
 use crate::hermes::Serializable;
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub struct BytecodeOptions {
     pub static_builtins: bool,

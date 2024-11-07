@@ -21,6 +21,8 @@ pub fn get_large_info_offset_pair(real_large_info_offset: u32) -> (u32, u32) {
     )
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub struct SmallFunctionHeader {
     pub offset: u32,
@@ -88,16 +90,6 @@ impl Default for SmallFunctionHeader {
 impl Serializable for SmallFunctionHeader {
     type Version = u32;
     fn size(&self) -> usize {
-        // let mut size: usize = 16; // base size
-        // if self.flags.has_exception_handler {
-        //     size += self.exception_handlers.first().as_ref().unwrap().size()
-        //         * self.exception_handlers.len();
-        // }
-
-        // if self.flags.has_debug_info {
-        //     size += self.debug_info.as_ref().unwrap().size();
-        // }
-        // size
         16
     }
 
@@ -244,6 +236,8 @@ impl Serializable for SmallFunctionHeader {
     }
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub struct LargeFunctionHeader {
     pub offset: u32,
@@ -352,15 +346,6 @@ impl From<SmallFunctionHeader> for LargeFunctionHeader {
 impl Serializable for LargeFunctionHeader {
     type Version = u32;
     fn size(&self) -> usize {
-        // let mut size = 32; // base size
-        // if self.flags.has_exception_handler {
-        //     size += self.exception_handlers.first().as_ref().unwrap().size()
-        //         * self.exception_handlers.len();
-        // }
-        // if self.flags.has_debug_info {
-        //     size += self.debug_info.as_ref().unwrap().size();
-        // }
-        // size
         32
     }
 
@@ -479,6 +464,8 @@ impl Serializable for LargeFunctionHeader {
     }
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub enum FunctionHeader {
     Small(SmallFunctionHeader),
@@ -658,6 +645,8 @@ impl FunctionHeader {
     }
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub enum FunctionHeaderFlagProhibitions {
     ProhibitCall = 0,
@@ -665,6 +654,8 @@ pub enum FunctionHeaderFlagProhibitions {
     ProhibitNone = 2,
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub struct FunctionHeaderFlag {
     pub prohibit_invoke: FunctionHeaderFlagProhibitions, // 2

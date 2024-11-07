@@ -8,7 +8,7 @@ use crate::hermes::function_header::{FunctionHeader, LargeFunctionHeader, SmallF
 use crate::hermes::IntoParentInstruction;
 use crate::hermes::OverflowStringTableEntry;
 use crate::hermes::SmallStringTableEntry;
-use crate::hermes::{Instruction, InstructionParser};
+use crate::hermes::{HermesInstruction, InstructionParser};
 
 impl<R> HermesFile<R>
 where
@@ -115,7 +115,7 @@ where
         func.set_byte_size(bc_size as u32);
         self.function_headers.push(func.clone());
 
-        let parent_bytecode: Vec<Instruction> = bytecode_clone
+        let parent_bytecode: Vec<HermesInstruction> = bytecode_clone
             .into_iter()
             .map(|insn| insn.into_parent())
             .collect();
@@ -124,9 +124,6 @@ where
             func_index: self.function_headers.len() as u32 - 1,
             bytecode: parent_bytecode,
         });
-        // write the bytecode at... some index, then update the function header offset with the bytecode index we wrote at.
-
-        // self.function_headers.push(function);
     }
 
     pub fn update_header(&mut self) {

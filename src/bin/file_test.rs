@@ -2,14 +2,11 @@ use hermes_rs::hermes_file::HermesFile;
 use std::{fs::File, io};
 
 fn main() {
-    // let filename = "./input_data/yeet.bundle";
-    // let filename = "./input_data/index.android.bundle";
     let filename = "./out.hbc";
-    // let filename = "./eval_print.hbc";
-    // let filename = "./input_data/eval.hbc";
-    // let filename = "./junk/oof/yes2.hbc";
     let f = File::open(filename).expect("no file found");
+
     let mut reader = io::BufReader::new(f);
+
     let mut hermes_file = HermesFile::deserialize(&mut reader);
 
     hermes_file.print_bytecode();

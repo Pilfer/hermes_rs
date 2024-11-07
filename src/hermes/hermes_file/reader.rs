@@ -15,7 +15,7 @@ use crate::hermes::function_sources::FunctionSourceEntry;
 use crate::hermes::regexp_table::RegExpTableEntry;
 use crate::hermes::string_kind::StringKindEntry;
 use crate::hermes::string_table::{OverflowStringTableEntry, SmallStringTableEntry};
-use crate::hermes::{Instruction, InstructionParser, Serializable};
+use crate::hermes::{HermesInstruction, InstructionParser, Serializable};
 
 use super::{FunctionBytecode, HermesFile, HermesStructReader};
 
@@ -79,8 +79,12 @@ where
         let mut hermes_file: HermesFile<&mut R> = HermesFile::new(r);
         hermes_file.visit_header();
         hermes_file.visit_function_headers();
-        // The bytecode of all of the functions are in this section. When reading, we have the offsets so we know where to start reading from.
-        // The debug_info for all of the functions follow the bytecode. Same as above - the info offset is in the function header, so we simply just read that.
+        // The bytecode of all of the functions are in this section.
+        // When reading, we have the offsets so we know where to start
+        // reading from.
+        // The debug_info for all of the functions follow the bytecode.
+        // Same as above - the info offset is in the function header, so
+        // we simply just read that.
         hermes_file.visit_string_kinds();
         hermes_file.visit_identifier_hashes();
         hermes_file.visit_small_string_table();
@@ -319,7 +323,7 @@ where
                 ));
             }
 
-            // Get storage bytes
+            // Get RegExp storage bytes
             self.visit_reg_exp_storage();
         }
     }
@@ -420,6 +424,9 @@ where
         out
     }
 
+    /*
+     * Returns a string from the string storage by index - UTF-16 or UTF-8
+     */
     pub fn get_string_from_storage_by_index(&self, index: usize) -> String {
         let myfunc = self.string_storage.get(index).unwrap();
         if myfunc.is_utf_16 {
@@ -442,6 +449,80 @@ where
             )
             .unwrap()
         }
+    }
+
+    /*
+     * Returns the instructions for a function by index
+     */
+    pub fn get_func_bytecode(&mut self, idx: u32) -> Vec<HermesInstruction> {
+        let fh = &self.function_headers.get(idx as usize).unwrap();
+        self._reader
+            .seek(io::SeekFrom::Start(fh.offset() as u64))
+            .unwrap();
+
+        let mut bytecode_buf = vec![0u8; fh.byte_size() as usize];
+        self._reader
+            .read_exact(&mut bytecode_buf)
+            .expect("unable to read first functions bytecode");
+
+        let mut instructions_list = vec![];
+
+        let mut byte_iter = bytecode_buf.iter();
+
+        // Iterate over bytecode_buf and parse the instructions
+        while let Some(&op_byte) = byte_iter.next() {
+            let op = op_byte;
+            // Make a new Cursor to print the remaining bytes
+            let mut r_cursor = io::Cursor::new(byte_iter.as_slice());
+
+            let ins_obj: Option<HermesInstruction> = match self.header.version {
+                #[cfg(feature = "v89")]
+                89 => Some(HermesInstruction::V89(
+                    crate::hermes::v89::Instruction::deserialize(&mut r_cursor, op),
+                )),
+                #[cfg(feature = "v90")]
+                90 => Some(HermesInstruction::V90(
+                    crate::hermes::v90::Instruction::deserialize(&mut r_cursor, op),
+                )),
+                #[cfg(feature = "v93")]
+                93 => Some(HermesInstruction::V93(
+                    crate::hermes::v93::Instruction::deserialize(&mut r_cursor, op),
+                )),
+                #[cfg(feature = "v94")]
+                94 => Some(HermesInstruction::V94(
+                    crate::hermes::v94::Instruction::deserialize(&mut r_cursor, op),
+                )),
+                #[cfg(feature = "v95")]
+                95 => Some(HermesInstruction::V95(
+                    crate::hermes::v95::Instruction::deserialize(&mut r_cursor, op),
+                )),
+                #[cfg(feature = "v96")]
+                96 => Some(HermesInstruction::V96(
+                    crate::hermes::v96::Instruction::deserialize(&mut r_cursor, op),
+                )),
+                _ => {
+                    panic!("Unsupported HBC version: {:?}. Check Cargo.toml features to see if this HBC version is enabled.", self.header.version);
+                    // None
+                }
+            };
+
+            if let Some(ins) = ins_obj {
+                // We have to subtract by 1 to account for the opcode byte, as
+                // we include it in the instruction size method, but it's
+                // already been read at this point.
+                let size = ins.size() - 1;
+                instructions_list.push(ins);
+
+                for _ in 0..size {
+                    if byte_iter.next().is_none() {
+                        break;
+                    }
+                }
+            }
+        }
+
+        instructions_list
+        // ---------------------------------------------------------------------------------------- //
     }
 
     pub fn parse_bytecode_for_fn(&mut self, idx: u32) {
@@ -491,29 +572,29 @@ where
             let mut r_cursor = io::Cursor::new(byte_iter.as_slice());
 
             // Deserialize the instruction
-            let ins_obj: Option<Instruction> = match self.header.version {
+            let ins_obj: Option<HermesInstruction> = match self.header.version {
                 #[cfg(feature = "v89")]
-                89 => Some(Instruction::V89(
+                89 => Some(HermesInstruction::V89(
                     crate::hermes::v89::Instruction::deserialize(&mut r_cursor, op),
                 )),
                 #[cfg(feature = "v90")]
-                90 => Some(Instruction::V90(
+                90 => Some(HermesInstruction::V90(
                     crate::hermes::v90::Instruction::deserialize(&mut r_cursor, op),
                 )),
                 #[cfg(feature = "v93")]
-                93 => Some(Instruction::V93(
+                93 => Some(HermesInstruction::V93(
                     crate::hermes::v93::Instruction::deserialize(&mut r_cursor, op),
                 )),
                 #[cfg(feature = "v94")]
-                94 => Some(Instruction::V94(
+                94 => Some(HermesInstruction::V94(
                     crate::hermes::v94::Instruction::deserialize(&mut r_cursor, op),
                 )),
                 #[cfg(feature = "v95")]
-                95 => Some(Instruction::V95(
+                95 => Some(HermesInstruction::V95(
                     crate::hermes::v95::Instruction::deserialize(&mut r_cursor, op),
                 )),
                 #[cfg(feature = "v96")]
-                96 => Some(Instruction::V96(
+                96 => Some(HermesInstruction::V96(
                     crate::hermes::v96::Instruction::deserialize(&mut r_cursor, op),
                 )),
                 _ => {
@@ -522,7 +603,6 @@ where
                 }
             };
 
-            // let ins: Instruction = ins_obj.unwrap();
             if let Some(ins) = ins_obj {
                 // This label code may be the worst code I've ever written
                 let mut label_idx = 0;
@@ -636,29 +716,29 @@ where
                     let mut r_cursor = io::Cursor::new(byte_iter.as_slice());
 
                     // Deserialize the instruction
-                    let ins_obj: Option<Instruction> = match self.header.version {
+                    let ins_obj: Option<HermesInstruction> = match self.header.version {
                         #[cfg(feature = "v89")]
-                        89 => Some(Instruction::V89(
+                        89 => Some(HermesInstruction::V89(
                             crate::hermes::v89::Instruction::deserialize(&mut r_cursor, op),
                         )),
                         #[cfg(feature = "v90")]
-                        90 => Some(Instruction::V90(
+                        90 => Some(HermesInstruction::V90(
                             crate::hermes::v90::Instruction::deserialize(&mut r_cursor, op),
                         )),
                         #[cfg(feature = "v93")]
-                        93 => Some(Instruction::V93(
+                        93 => Some(HermesInstruction::V93(
                             crate::hermes::v93::Instruction::deserialize(&mut r_cursor, op),
                         )),
                         #[cfg(feature = "v94")]
-                        94 => Some(Instruction::V94(
+                        94 => Some(HermesInstruction::V94(
                             crate::hermes::v94::Instruction::deserialize(&mut r_cursor, op),
                         )),
                         #[cfg(feature = "v95")]
-                        95 => Some(Instruction::V95(
+                        95 => Some(HermesInstruction::V95(
                             crate::hermes::v95::Instruction::deserialize(&mut r_cursor, op),
                         )),
                         #[cfg(feature = "v96")]
-                        96 => Some(Instruction::V96(
+                        96 => Some(HermesInstruction::V96(
                             crate::hermes::v96::Instruction::deserialize(&mut r_cursor, op),
                         )),
                         _ => {
@@ -667,7 +747,6 @@ where
                         }
                     };
 
-                    // let ins: Instruction = ins_obj.unwrap();
                     if let Some(ins) = ins_obj {
                         // This label code may be the worst code I've ever written
                         let mut label_idx = 0;

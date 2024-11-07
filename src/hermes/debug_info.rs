@@ -6,6 +6,8 @@ use crate::hermes::Serializable;
 
 use super::decode::align_reader;
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub struct DebugInfo {
     pub header: DebugInfoHeader,
@@ -136,6 +138,8 @@ impl Serializable for DebugInfo {
     }
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub enum DebugInfoOffsets {
     Old(DebugInfoOffsetsOld),
@@ -172,6 +176,8 @@ impl DebugInfoOffsets {
     }
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub struct DebugInfoOffsetsNew {
     pub src: u32,
@@ -213,6 +219,8 @@ impl Serializable for DebugInfoOffsetsNew {
     }
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub struct DebugInfoOffsetsOld {
     pub src: u32,
@@ -243,6 +251,8 @@ impl Serializable for DebugInfoOffsetsOld {
     }
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub struct DebugInfoHeader {
     pub filename_count: u32,
@@ -298,6 +308,8 @@ impl Serializable for DebugInfoHeader {
     }
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub struct DebugStringTable {
     pub offset: u32,
@@ -328,6 +340,8 @@ impl Serializable for DebugStringTable {
     }
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub struct DebugFileRegion {
     pub from_address: u32,
@@ -363,6 +377,8 @@ impl Serializable for DebugFileRegion {
     }
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct FunctionDebugInfoDeserializer {

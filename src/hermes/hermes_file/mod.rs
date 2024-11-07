@@ -3,7 +3,6 @@ pub mod reader;
 pub mod writer;
 
 use std::collections::HashMap;
-use std::io;
 
 use crate::hermes::big_int_table::BigIntTableEntry;
 use crate::hermes::cjs_module::CJSModule;
@@ -15,7 +14,7 @@ use crate::hermes::regexp_table::RegExpTableEntry;
 use crate::hermes::string_kind::StringKindEntry;
 use crate::hermes::string_table::{OverflowStringTableEntry, SmallStringTableEntry};
 
-use super::{HermesStructReader, Instruction};
+use super::{HermesInstruction, HermesStructReader};
 
 // This struct should contain all the offsets for the different sections of the file
 // It isn't part of the official spec, but we'll need it for writing different
@@ -24,6 +23,8 @@ use super::{HermesStructReader, Instruction};
 // Alternatively, we could just write the data section first and then write the
 // header and offsets at the end of the file.
 #[allow(dead_code)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub struct HermesOffsets {
     small_string_table_offsets: HashMap<u32, u32>, // index of string in string storage -> offset in file
@@ -33,23 +34,26 @@ pub struct HermesOffsets {
     file_length: u32,       // after serializing the footer, write the file length to this value
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub struct FunctionBytecode {
     pub func_index: u32,
     pub bytecode: Vec<u8>,
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub struct FunctionInstructions {
     pub func_index: u32,
-    pub bytecode: Vec<Instruction>,
+    pub bytecode: Vec<HermesInstruction>,
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
-pub struct HermesFile<R>
-where
-    R: io::Read + io::BufRead + io::Seek,
-{
+pub struct HermesFile<R> {
     // Our reader
     _reader: R,
 

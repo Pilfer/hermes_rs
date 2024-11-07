@@ -4,6 +4,8 @@ use crate::hermes::decode::{decode_u32, read_bitfield};
 use crate::hermes::encode::{encode_u32, encode_u8, write_bitfield};
 use crate::hermes::Serializable;
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub struct SmallStringTableEntry {
     pub is_utf_16: bool,
@@ -58,6 +60,8 @@ impl Serializable for SmallStringTableEntry {
     }
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub struct OverflowStringTableEntry {
     pub offset: u32,

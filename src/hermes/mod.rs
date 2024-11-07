@@ -287,6 +287,8 @@ macro_rules! map_encode_fn {
 macro_rules! define_opcode {
 ($name:ident, $($field:ident : $arg:tt),*) => {
 
+  #[cfg_attr(feature = "specta", derive(specta::Type))]
+  #[cfg_attr(feature = "serde", derive(serde::Serialize))]
   #[derive(Debug, Copy, Clone)]
   pub struct $name {
     pub op: u8,
@@ -558,9 +560,12 @@ macro_rules! impl_instruction_parser {
 #[macro_export]
 macro_rules! build_instructions {
 ($(($opcode:expr, $instruction:ident, $($operand:ident : $type:ident),*)),*) => {
-  use std::io;
+    use std::io;
+
     $(define_opcode!($instruction, $($operand : $type),*);)*
 
+    #[cfg_attr(feature = "specta", derive(specta::Type))]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize))]
     #[derive(Debug, Copy)]
     #[repr(u8)]
     pub enum Instruction {
@@ -641,8 +646,10 @@ pub mod v95;
 #[cfg(feature = "v96")]
 pub mod v96;
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
-pub enum Instruction {
+pub enum HermesInstruction {
     #[cfg(feature = "v89")]
     V89(v89::Instruction),
     #[cfg(feature = "v90")]
@@ -657,75 +664,75 @@ pub enum Instruction {
     V96(v96::Instruction),
 }
 
-impl Instruction {
+impl HermesInstruction {
     pub fn display<R>(&self, _hermes: &HermesFile<R>) -> String
     where
         R: io::Read + io::BufRead + io::Seek,
     {
         match self {
             #[cfg(feature = "v89")]
-            Instruction::V89(instruction) => instruction.display(_hermes),
+            HermesInstruction::V89(instruction) => instruction.display(_hermes),
             #[cfg(feature = "v90")]
-            Instruction::V90(instruction) => instruction.display(_hermes),
+            HermesInstruction::V90(instruction) => instruction.display(_hermes),
             #[cfg(feature = "v93")]
-            Instruction::V93(instruction) => instruction.display(_hermes),
+            HermesInstruction::V93(instruction) => instruction.display(_hermes),
             #[cfg(feature = "v94")]
-            Instruction::V94(instruction) => instruction.display(_hermes),
+            HermesInstruction::V94(instruction) => instruction.display(_hermes),
             #[cfg(feature = "v95")]
-            Instruction::V95(instruction) => instruction.display(_hermes),
+            HermesInstruction::V95(instruction) => instruction.display(_hermes),
             #[cfg(feature = "v96")]
-            Instruction::V96(instruction) => instruction.display(_hermes),
+            HermesInstruction::V96(instruction) => instruction.display(_hermes),
         }
     }
 
     pub fn is_jmp(&self) -> bool {
         match self {
             #[cfg(feature = "v89")]
-            Instruction::V89(instruction) => instruction.is_jmp(),
+            HermesInstruction::V89(instruction) => instruction.is_jmp(),
             #[cfg(feature = "v90")]
-            Instruction::V90(instruction) => instruction.is_jmp(),
+            HermesInstruction::V90(instruction) => instruction.is_jmp(),
             #[cfg(feature = "v93")]
-            Instruction::V93(instruction) => instruction.is_jmp(),
+            HermesInstruction::V93(instruction) => instruction.is_jmp(),
             #[cfg(feature = "v94")]
-            Instruction::V94(instruction) => instruction.is_jmp(),
+            HermesInstruction::V94(instruction) => instruction.is_jmp(),
             #[cfg(feature = "v95")]
-            Instruction::V95(instruction) => instruction.is_jmp(),
+            HermesInstruction::V95(instruction) => instruction.is_jmp(),
             #[cfg(feature = "v96")]
-            Instruction::V96(instruction) => instruction.is_jmp(),
+            HermesInstruction::V96(instruction) => instruction.is_jmp(),
         }
     }
 
     pub fn get_address_field(&self) -> u32 {
         match self {
             #[cfg(feature = "v89")]
-            Instruction::V89(instruction) => instruction.get_address_field(),
+            HermesInstruction::V89(instruction) => instruction.get_address_field(),
             #[cfg(feature = "v90")]
-            Instruction::V90(instruction) => instruction.get_address_field(),
+            HermesInstruction::V90(instruction) => instruction.get_address_field(),
             #[cfg(feature = "v93")]
-            Instruction::V93(instruction) => instruction.get_address_field(),
+            HermesInstruction::V93(instruction) => instruction.get_address_field(),
             #[cfg(feature = "v94")]
-            Instruction::V94(instruction) => instruction.get_address_field(),
+            HermesInstruction::V94(instruction) => instruction.get_address_field(),
             #[cfg(feature = "v95")]
-            Instruction::V95(instruction) => instruction.get_address_field(),
+            HermesInstruction::V95(instruction) => instruction.get_address_field(),
             #[cfg(feature = "v96")]
-            Instruction::V96(instruction) => instruction.get_address_field(),
+            HermesInstruction::V96(instruction) => instruction.get_address_field(),
         }
     }
 
     pub fn size(&self) -> usize {
         match self {
             #[cfg(feature = "v89")]
-            Instruction::V89(instruction) => instruction.size(),
+            HermesInstruction::V89(instruction) => instruction.size(),
             #[cfg(feature = "v90")]
-            Instruction::V90(instruction) => instruction.size(),
+            HermesInstruction::V90(instruction) => instruction.size(),
             #[cfg(feature = "v93")]
-            Instruction::V93(instruction) => instruction.size(),
+            HermesInstruction::V93(instruction) => instruction.size(),
             #[cfg(feature = "v94")]
-            Instruction::V94(instruction) => instruction.size(),
+            HermesInstruction::V94(instruction) => instruction.size(),
             #[cfg(feature = "v95")]
-            Instruction::V95(instruction) => instruction.size(),
+            HermesInstruction::V95(instruction) => instruction.size(),
             #[cfg(feature = "v96")]
-            Instruction::V96(instruction) => instruction.size(),
+            HermesInstruction::V96(instruction) => instruction.size(),
         }
     }
 
@@ -735,17 +742,17 @@ impl Instruction {
     {
         match self {
             #[cfg(feature = "v89")]
-            Instruction::V89(instruction) => instruction.serialize(w),
+            HermesInstruction::V89(instruction) => instruction.serialize(w),
             #[cfg(feature = "v90")]
-            Instruction::V90(instruction) => instruction.serialize(w),
+            HermesInstruction::V90(instruction) => instruction.serialize(w),
             #[cfg(feature = "v93")]
-            Instruction::V93(instruction) => instruction.serialize(w),
+            HermesInstruction::V93(instruction) => instruction.serialize(w),
             #[cfg(feature = "v94")]
-            Instruction::V94(instruction) => instruction.serialize(w),
+            HermesInstruction::V94(instruction) => instruction.serialize(w),
             #[cfg(feature = "v95")]
-            Instruction::V95(instruction) => instruction.serialize(w),
+            HermesInstruction::V95(instruction) => instruction.serialize(w),
             #[cfg(feature = "v96")]
-            Instruction::V96(instruction) => instruction.serialize(w),
+            HermesInstruction::V96(instruction) => instruction.serialize(w),
         }
     }
 
@@ -755,65 +762,65 @@ impl Instruction {
     {
         match op {
             #[cfg(feature = "v89")]
-            89 => Instruction::V89(v89::Instruction::deserialize(r, op)),
+            89 => HermesInstruction::V89(v89::Instruction::deserialize(r, op)),
             #[cfg(feature = "v90")]
-            90 => Instruction::V90(v90::Instruction::deserialize(r, op)),
+            90 => HermesInstruction::V90(v90::Instruction::deserialize(r, op)),
             #[cfg(feature = "v93")]
-            93 => Instruction::V93(v93::Instruction::deserialize(r, op)),
+            93 => HermesInstruction::V93(v93::Instruction::deserialize(r, op)),
             #[cfg(feature = "v94")]
-            94 => Instruction::V94(v94::Instruction::deserialize(r, op)),
+            94 => HermesInstruction::V94(v94::Instruction::deserialize(r, op)),
             #[cfg(feature = "v95")]
-            95 => Instruction::V95(v95::Instruction::deserialize(r, op)),
+            95 => HermesInstruction::V95(v95::Instruction::deserialize(r, op)),
             #[cfg(feature = "v96")]
-            96 => Instruction::V96(v96::Instruction::deserialize(r, op)),
-            _ => Instruction::V96(v96::Instruction::deserialize(r, op)),
+            96 => HermesInstruction::V96(v96::Instruction::deserialize(r, op)),
+            _ => HermesInstruction::V96(v96::Instruction::deserialize(r, op)),
         }
     }
 }
 
 pub trait IntoParentInstruction {
-    fn into_parent(self) -> Instruction;
+    fn into_parent(self) -> HermesInstruction;
 }
 
 #[cfg(feature = "v89")]
 impl IntoParentInstruction for v89::Instruction {
-    fn into_parent(self) -> Instruction {
-        Instruction::V89(self)
+    fn into_parent(self) -> HermesInstruction {
+        HermesInstruction::V89(self)
     }
 }
 
 #[cfg(feature = "v90")]
 impl IntoParentInstruction for v90::Instruction {
-    fn into_parent(self) -> Instruction {
-        Instruction::V90(self)
+    fn into_parent(self) -> HermesInstruction {
+        HermesInstruction::V90(self)
     }
 }
 
 #[cfg(feature = "v93")]
 impl IntoParentInstruction for v93::Instruction {
-    fn into_parent(self) -> Instruction {
-        Instruction::V93(self)
+    fn into_parent(self) -> HermesInstruction {
+        HermesInstruction::V93(self)
     }
 }
 
 #[cfg(feature = "v94")]
 impl IntoParentInstruction for v94::Instruction {
-    fn into_parent(self) -> Instruction {
-        Instruction::V94(self)
+    fn into_parent(self) -> HermesInstruction {
+        HermesInstruction::V94(self)
     }
 }
 
 #[cfg(feature = "v95")]
 impl IntoParentInstruction for v95::Instruction {
-    fn into_parent(self) -> Instruction {
-        Instruction::V95(self)
+    fn into_parent(self) -> HermesInstruction {
+        HermesInstruction::V95(self)
     }
 }
 
 #[cfg(feature = "v96")]
 impl IntoParentInstruction for v96::Instruction {
-    fn into_parent(self) -> Instruction {
-        Instruction::V96(self)
+    fn into_parent(self) -> HermesInstruction {
+        HermesInstruction::V96(self)
     }
 }
 

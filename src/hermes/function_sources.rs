@@ -4,6 +4,8 @@ use crate::hermes::decode::decode_u32;
 use crate::hermes::encode::encode_u32;
 use crate::hermes::Serializable;
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub struct FunctionSourceEntry {
     pub function_id: u32,

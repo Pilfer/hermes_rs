@@ -68,7 +68,18 @@ A couple of features are missing currently, as they're low priority for me at th
 
 ## Installation
 
-`cargo add hermes_rs`
+To add hermes_rs to your project, simply run:  
+
+`cargo add hermes_rs`  
+
+- **Specific HBC Versions** - enable any of `["v89","v90","v93","v94","v95", "v96"]`  
+  - **Default**: `["v94","v95", "v96"]`  
+- **Serde Support** (Optional) - enable the `serde` feature  
+- **Generate TS Types** (Optional) - enable the `specta` feature  
+  - `cargo run --bin gen_ts --features specta` will output `*.d.ts` to `./ts`.  
+  - Note: Only one HBC version can be used at a time for this due to a limitiation in `specta`.  
+
+
 
 ## Usage
 
@@ -270,6 +281,9 @@ assert!(writer == vec![115, 0, 1, 0, 94, 0, 0, 0, 92, 0], "Bytecode is incorrect
 
 Take a look at the [Creating Binaries](./CreatingBinaries.md) example.
 
+Working example: `cargo run --example create`  
+
+
 #### Using specific HBC Versions
 
 Want to use a specific version of the Hermes bytecode and reduce your binary size?
@@ -357,7 +371,7 @@ pub mod v100;
 
 // ...
 
-pub enum Instruction {
+pub enum HermesInstruction {
   // ...
   #[cfg(feature = "v100")]
   V100(v100::Instruction),
@@ -365,13 +379,13 @@ pub enum Instruction {
 
 // ...
 
-impl Instruction {
+impl HermesInstruction {
   // implement the methods of the trait
   fn display(&self, _hermes: &HermesHeader) -> String{
       match self {
         // ...
         #[cfg(feature = "v100")]
-        Instruction::V100(instruction) => instruction.display(_hermes),
+        HermesInstruction::V100(instruction) => instruction.display(_hermes),
       }
   }
 
@@ -379,7 +393,7 @@ impl Instruction {
       match self {
           // ...
           #[cfg(feature = "v100")]
-          Instruction::V100(instruction) => instruction.size(),
+          HermesInstruction::V100(instruction) => instruction.size(),
       }
   }
 }
@@ -388,17 +402,17 @@ impl Instruction {
 // ...
 
 // In parse_bytecode there's currently a match statement that will also need to be populated...
-let ins_obj: Option<Instruction> = match self.version {
+let ins_obj: Option<HermesInstruction> = match self.version {
   #[cfg(feature = "v89")]
-  89 => Some(Instruction::V89(v89::Instruction::deserialize(&mut r_cursor, op))),
+  89 => Some(HermesInstruction::V89(v89::Instruction::deserialize(&mut r_cursor, op))),
   #[cfg(feature = "v90")]
-  90 => Some(Instruction::V90(v90::Instruction::deserialize(&mut r_cursor, op))),
+  90 => Some(HermesInstruction::V90(v90::Instruction::deserialize(&mut r_cursor, op))),
   #[cfg(feature = "v93")]
-  93 => Some(Instruction::V93(v93::Instruction::deserialize(&mut r_cursor, op))),
+  93 => Some(HermesInstruction::V93(v93::Instruction::deserialize(&mut r_cursor, op))),
   #[cfg(feature = "v94")]
-  94 => Some(Instruction::V94(v94::Instruction::deserialize(&mut r_cursor, op))),
+  94 => Some(HermesInstruction::V94(v94::Instruction::deserialize(&mut r_cursor, op))),
   #[cfg(feature = "v95")]
-  95 => Some(Instruction::V95(v95::Instruction::deserialize(&mut r_cursor, op))),
+  95 => Some(HermesInstruction::V95(v95::Instruction::deserialize(&mut r_cursor, op))),
   _ => None,
 };
 ```

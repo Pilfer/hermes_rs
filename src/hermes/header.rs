@@ -6,6 +6,8 @@ use crate::hermes::decode::{align_reader, decode_u32, decode_u64};
 use crate::hermes::encode::{encode_u32, encode_u64};
 use crate::hermes::Serializable;
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub struct HermesHeader {
     // file: &'a HermesFile<'a>,
@@ -35,19 +37,6 @@ pub struct HermesHeader {
 
     pub options: BytecodeOptions,
     pub _padding: [u8; 19],
-    // pub function_headers: Vec<FunctionHeader>,
-    // pub string_kinds: Vec<StringKindEntry>,
-    // pub identifier_hashes: Vec<u32>,
-    // pub string_storage: Vec<SmallStringTableEntry>,
-    // pub string_storage_bytes: Vec<u8>,
-    // pub overflow_string_storage: Vec<OverflowStringTableEntry>,
-    // pub array_buffer_storage: Vec<u8>,
-    // pub object_key_buffer: Vec<u8>,
-    // pub object_val_buffer: Vec<u8>,
-    // pub big_int_table: Vec<BigIntTableEntry>,
-    // pub reg_exp_table: Vec<RegExpTableEntry>,
-    // pub cjs_modules: Vec<CJSModule>,
-    // pub function_source_entries: Vec<FunctionSourceEntry>,
 }
 
 impl Default for HermesHeader {
@@ -84,19 +73,6 @@ impl HermesHeader {
             debug_info_offset: 0,
             options: BytecodeOptions::new(),
             _padding: [0; 19],
-            // function_headers: vec![],
-            // string_kinds: vec![],
-            // identifier_hashes: vec![],
-            // string_storage: vec![],
-            // string_storage_bytes: vec![],
-            // overflow_string_storage: vec![],
-            // array_buffer_storage: vec![],
-            // object_key_buffer: vec![],
-            // object_val_buffer: vec![],
-            // big_int_table: vec![],
-            // reg_exp_table: vec![],
-            // cjs_modules: vec![],
-            // function_source_entries: vec![],
         }
     }
 }
@@ -111,14 +87,6 @@ pub trait HermesStructReader {
         W: std::io::Write + std::io::Seek;
 
     fn size(&self) -> usize;
-
-    // fn parse_bytecode<R>(&self, r: &mut R)
-    // where
-    //     R: io::Read + io::BufRead + io::Seek;
-
-    // fn parse_bytecode_for_fn<R: io::Read + io::BufRead + io::Seek>(&self, idx: u32, r: &mut R)
-    // where
-    //     R: io::Read + io::BufRead + io::Seek;
 }
 
 impl HermesStructReader for HermesHeader {
@@ -249,101 +217,6 @@ impl HermesStructReader for HermesHeader {
         // Write padding bytes
         w.write_all(&self._padding)
             .expect("unable to write padding bytes");
-        /*
-        // Write function headers
-        for fh in &self.function_headers {
-            match fh {
-                FunctionHeader::Small(sfh) => {
-                    align_writer(w, 4);
-                    sfh.serialize(w)
-                }
-                FunctionHeader::Large(lfh) => lfh.serialize(w),
-            }
-        }
-
-        // Write string kinds
-        align_writer(w, 4);
-        for sk in &self.string_kinds {
-            sk.serialize(w);
-        }
-
-        // Write identifier hashes
-        align_writer(w, 4);
-        for ih in &self.identifier_hashes {
-            encode_u32(w, *ih);
-        }
-
-        // Write string table entries
-        align_writer(w, 4);
-        for ss in &self.string_storage {
-            ss.serialize(w);
-        }
-
-        // Write overflow string table entries
-        align_writer(w, 4);
-        for os in &self.overflow_string_storage {
-            os.serialize(w);
-        }
-
-        // Write string storage bytes
-        align_writer(w, 4);
-        w.write_all(&self.string_storage_bytes)
-            .expect("unable to write string storage bytes");
-
-        // Write array buffer storage
-        align_writer(w, 4);
-        w.write_all(&self.array_buffer_storage)
-            .expect("unable to write array buffer storage");
-
-        // Write object key buffer
-        align_writer(w, 4);
-        w.write_all(&self.object_key_buffer)
-            .expect("unable to write object key buffer");
-
-        // Write object value buffer
-        align_writer(w, 4);
-        w.write_all(&self.object_val_buffer)
-            .expect("unable to write object value buffer");
-
-        // Write big int table
-        align_writer(w, 4);
-        for bi in &self.big_int_table {
-            bi.serialize(w);
-        }
-        align_writer(w, 4);
-
-        // Write reg exp table
-        // TODO: actually look into this lol
-        align_writer(w, 4);
-        for re in &self.reg_exp_table {
-            re.serialize(w);
-        }
-        align_writer(w, 4);
-
-        // TODO: write reg_exp_storage bytes - needs to be added to the struct
-        // reg_exp_storage
-
-        // Write CJS modules
-        align_writer(w, 4);
-        for cjs in &self.cjs_modules {
-            if self.options.cjs_modules_statically_resolved && self.version < 77 {
-                match cjs {
-                    CJSModule::CJSModuleInt(cjs_int) => cjs_int.serialize(w),
-                    _ => panic!("CJSModuleInt expected, but got something else"),
-                }
-            } else {
-                match cjs {
-                    CJSModule::CJSModuleEntry(cjs_entry) => cjs_entry.serialize(w),
-                    _ => panic!("CJSModuleEntry expected, but got something else"),
-                }
-            }
-        }
-
-        // Write function source entries
-        align_writer(w, 4);
-        for fse in &self.function_source_entries {
-            fse.serialize(w);
-        } */
     }
 
     // Read string

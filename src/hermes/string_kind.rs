@@ -4,18 +4,24 @@ use crate::hermes::decode::read_bitfield;
 use crate::hermes::encode::{encode_u8, write_bitfield};
 use crate::hermes::Serializable;
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub struct StringKindEntryNew {
     pub count: u32,
     pub kind: StringKind,
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub struct StringKindEntryOld {
     pub count: u32,
     pub kind: StringKind,
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub enum StringKindEntry {
     Old(StringKindEntryOld),
@@ -158,6 +164,8 @@ impl Serializable for StringKindEntryOld {
     }
 }
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub enum StringKind {
     String,
