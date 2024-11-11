@@ -9,11 +9,112 @@ use crate::hermes::IntoParentInstruction;
 use crate::hermes::OverflowStringTableEntry;
 use crate::hermes::SmallStringTableEntry;
 use crate::hermes::{HermesInstruction, InstructionParser};
+use crate::hermes::string_kind::{StringKind, StringKindEntry, StringKindEntryNew, StringKindEntryOld};
+
+#[derive(Debug, Clone)]
+pub struct StringTypePair {
+    pub string: String,
+    pub kind: StringKind,
+}
 
 impl<R> HermesFile<R>
 where
     R: io::Read + io::BufRead + io::Seek,
 {
+
+    pub fn push_string_kind(&mut self, kind: StringKind, count: u32) {
+        if count > 0 {
+            let sk = if self.header.version <= 71 {
+                StringKindEntry::Old(StringKindEntryOld {
+                    kind,
+                    count,
+                })
+            } else {
+                StringKindEntry::New(StringKindEntryNew {
+                    kind,
+                    count,
+                })
+            };
+            self.string_kinds.push(sk);
+        }
+    }
+
+    // TODO: need to append identifiers
+    pub fn set_strings_ordered(&mut self, strings: Vec<StringTypePair>, identifiers: Vec<StringTypePair>, predefined: Vec<StringTypePair>) {
+        let mut string_storage: Vec<SmallStringTableEntry> = vec![];
+        let mut string_storage_bytes: Vec<u8> = vec![];
+
+        let mut string_count = 0;
+        let mut identifier_count = 0;
+        let mut predefined_count = 0;
+
+        for pair in strings {
+            let string = pair.string;
+            let is_utf_16 = string.chars().any(|c| c as u32 > 0x10000);
+            let offset = string_storage_bytes.len() as u32;
+            let length = string.len() as u32;
+            
+            string_storage.push(SmallStringTableEntry {
+                is_utf_16,
+                offset,
+                length,
+            });
+
+            string_storage_bytes.extend(string.as_bytes());
+
+            string_count += 1;
+        }
+
+        for pair in identifiers {
+            let string = pair.string;
+            let is_utf_16 = string.chars().any(|c| c as u32 > 0x10000);
+            let offset = string_storage_bytes.len() as u32;
+            let length = string.len() as u32;
+            
+            string_storage.push(SmallStringTableEntry {
+                is_utf_16,
+                offset,
+                length,
+            });
+
+            string_storage_bytes.extend(string.as_bytes());
+
+            identifier_count += 1;
+        }
+
+        for pair in predefined {
+            let string = pair.string;
+            let is_utf_16 = string.chars().any(|c| c as u32 > 0x10000);
+            let offset = string_storage_bytes.len() as u32;
+            let length = string.len() as u32;
+            
+            string_storage.push(SmallStringTableEntry {
+                is_utf_16,
+                offset,
+                length,
+            });
+
+            string_storage_bytes.extend(string.as_bytes());
+
+            predefined_count += 1;
+        }
+
+        self.string_kinds = vec![];
+
+        self.push_string_kind(StringKind::String, string_count);
+        self.push_string_kind(StringKind::Identifier, identifier_count);
+        self.push_string_kind(StringKind::Predefined, predefined_count);
+
+        let ssl = string_storage.len() as u32;
+        self.string_storage = string_storage;
+        self.header.string_count = ssl;
+
+        self.string_storage_bytes = string_storage_bytes;
+
+        // self.set_strings(strings);
+        // self.set_overflow_string(overflow_strings);
+    }
+
     // Set the strings present in the HermesFile, build out String Table, etc...
     pub fn set_strings(&mut self, strings: Vec<String>) {
         let mut string_storage: Vec<SmallStringTableEntry> = vec![];
@@ -33,8 +134,29 @@ where
 
         // pad an extra 10000000 bytes to the end of the string storage for testing.
         // string_storage_bytes.extend(vec![0; 10000000]);
-        self.header.string_count = string_storage.len() as u32;
+        let ssl = string_storage.len() as u32;
         self.string_storage = string_storage;
+        self.header.string_count = ssl;
+        for sk in self.string_kinds.iter_mut() {
+            match sk {
+                StringKindEntry::Old(old) => {
+                    match old.kind {
+                        StringKind::String => {
+                            old.count = self.header.string_count;
+                        },
+                        _ => {}
+                    }
+                }
+                StringKindEntry::New(new) => {
+                    match new.kind {
+                        StringKind::String => {
+                            new.count = self.header.string_count;
+                        },
+                        _ => {}
+                    }
+                }
+            }
+        }
 
         self.string_storage_bytes = string_storage_bytes;
     }

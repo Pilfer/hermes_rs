@@ -12,6 +12,8 @@ pub mod hermes_file;
 pub mod regexp_table;
 pub mod string_kind;
 pub mod string_table;
+pub mod types;
+pub mod jenkins;
 
 use std::io;
 
@@ -23,15 +25,163 @@ pub use hermes_file::HermesFile;
 pub use string_kind::{StringKind, StringKindEntry};
 pub use string_table::{OverflowStringTableEntry, SmallStringTableEntry};
 
-pub type Reg8 = u8;
-pub type Reg32 = u32;
-pub type UInt8 = u8;
-pub type UInt16 = u16;
-pub type UInt32 = u32;
-pub type Addr8 = i8;
-pub type Addr32 = i32;
-pub type Imm32 = i32;
-pub type Double = f64;
+// pub type Reg8 = u8;
+/*
+
+#[derive(Debug, Copy, Clone)]
+pub struct Reg8(u8);
+impl Default for Reg8 { fn default() -> Self { Reg8(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct Reg32(u32);
+impl Default for Reg32 { fn default() -> Self { Reg32(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct UInt8(u8);
+impl Default for UInt8 { fn default() -> Self { UInt8(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct UInt16(u16);
+impl Default for UInt16 { fn default() -> Self { UInt16(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct UInt32(u32);
+impl Default for UInt32 { fn default() -> Self { UInt32(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct Addr8(i8);
+impl Default for Addr8 { fn default() -> Self { Addr8(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct Addr32(i32);
+impl Default for Addr32 { fn default() -> Self { Addr32(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct Imm32(i32);
+impl Default for Imm32 { fn default() -> Self { Imm32(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct Double(f64);
+impl Default for Double { fn default() -> Self { Double(0.0) } }
+
+// Index types - the values reference the values at {index} in StringTable, FunctionTable, and BigIntTable
+#[derive(Debug, Copy, Clone)]
+pub struct StringIDUInt8(u8);
+impl Default for StringIDUInt8 { fn default() -> Self { StringIDUInt8(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct StringIDUInt16(u16);
+impl Default for StringIDUInt16 { fn default() -> Self { StringIDUInt16(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct StringIDUInt32(u32);
+impl Default for StringIDUInt32 { fn default() -> Self { StringIDUInt32(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct FunctionIDUInt8(u8);
+impl Default for FunctionIDUInt8 { fn default() -> Self { FunctionIDUInt8(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct FunctionIDUInt16(u16);
+impl Default for FunctionIDUInt16 { fn default() -> Self { FunctionIDUInt16(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct FunctionIDUInt32(u32);
+impl Default for FunctionIDUInt32 { fn default() -> Self { FunctionIDUInt32(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct BigIntIDUInt16(u16);
+impl Default for BigIntIDUInt16 { fn default() -> Self { BigIntIDUInt16(0) } }
+
+#[derive(Debug, Copy, Clone)]
+pub struct BigIntIDUInt32(u32);
+impl Default for BigIntIDUInt32 { fn default() -> Self { BigIntIDUInt32(0) } }
+
+impl From<u8> for Reg8 {
+  fn from(value: u8) -> Self {
+      Reg8(value)
+  }
+}
+
+impl From<Reg8> for u8 {
+  fn from(value: Reg8) -> Self {
+      value.0
+  }
+}
+
+impl From<u16> for UInt16 {
+  fn from(value: u16) -> Self {
+      UInt16(value)
+  }
+}
+
+impl From<UInt16> for u16 {
+  fn from(value: UInt16) -> Self {
+      value.0
+  }
+}
+
+impl From<u32> for UInt32 {
+  fn from(value: u32) -> Self {
+      UInt32(value)
+  }
+}
+
+impl From<UInt32> for u32 {
+  fn from(value: UInt32) -> Self {
+      value.0
+  }
+}
+
+impl From<i8> for Addr8 {
+  fn from(value: i8) -> Self {
+      Addr8(value)
+  }
+}
+
+impl From<Addr8> for i8 {
+  fn from(value: Addr8) -> Self {
+      value.0
+  }
+}
+
+impl From<i32> for Addr32 {
+  fn from(value: i32) -> Self {
+      Addr32(value)
+  }
+}
+
+impl From<Addr32> for i32 {
+  fn from(value: Addr32) -> Self {
+      value.0
+  }
+}
+
+impl From<i32> for Imm32 {
+  fn from(value: i32) -> Self {
+      Imm32(value)
+  }
+}
+
+impl From<Imm32> for i32 {
+  fn from(value: Imm32) -> Self {
+      value.0
+  }
+}
+
+impl From<f64> for Double {
+  fn from(value: f64) -> Self {
+      Double(value)
+  }
+}
+
+impl From<Double> for f64 {
+  fn from(value: Double) -> Self {
+      value.0
+  }
+}
+*/
+// -- end hermes types
 
 pub trait InstructionParser {
     // fn new() -> Self;
@@ -44,6 +194,10 @@ pub trait InstructionParser {
     fn serialize<W>(&self, _w: &mut W)
     where
         W: io::Write;
+
+    fn get_string_field_names(&self) -> Vec<&str>;
+
+    fn get_function_field_names(&self) -> Vec<&str>;
 
     fn display<R>(&self, hermes: &HermesFile<R>) -> String
     where
@@ -62,7 +216,6 @@ pub trait InstructionParser {
 }
 
 // Start macros
-
 #[macro_export]
 macro_rules! map_type {
     (Reg8) => {
@@ -284,6 +437,20 @@ macro_rules! map_encode_fn {
 }
 
 #[macro_export]
+macro_rules! get_field {
+  ($struct:expr, $field:ident) => {
+      $struct.$field
+  };
+}
+
+#[macro_export]
+macro_rules! set_field {
+  ($struct:expr, $field:ident, $value:expr) => {
+      $struct.$field = $value;
+  };
+}
+
+#[macro_export]
 macro_rules! define_opcode {
 ($name:ident, $($field:ident : $arg:tt),*) => {
 
@@ -293,24 +460,34 @@ macro_rules! define_opcode {
   pub struct $name {
     pub op: u8,
     $(
-      pub $field: map_type!($arg),
+      // pub $field: map_type!($arg),
+      pub $field: $arg,
     )*
   }
 
+  // impl Default for $name {
+  //   fn default() -> Self {
+  //     Self {
+  //         op: 0,
+  //         $(
+  //           // $field: match stringify!(map_type!($arg)) {
+  //             // "Double" => 0.0 as _,
+  //             // _ => 0 as $arg,
+  //           // },
+  //         )*
+  //     }
+  //   }
+  // }
   impl Default for $name {
     fn default() -> Self {
-      Self {
-          op: 0,
-          $(
-            $field: match stringify!(map_type!($arg)) {
-              "Double" => 0.0 as _,
-              _ => 0 as _,
-            },
-          )*
-      }
+        Self {
+            op: 0,
+            $(
+                $field: Default::default(),
+            )*
+        }
     }
-  }
-
+}
 
   impl hermes::InstructionParser for $name {
     fn deserialize<R>(_r: &mut R, op: u8) -> Self
@@ -320,7 +497,8 @@ macro_rules! define_opcode {
       return Self{
         op,
         $(
-          $field: map_decode_fn!($arg)(_r),
+          // $field: map_decode_fn!($arg)(_r),
+          $field: map_decode_fn!($arg)(_r).into(),
         )*
       }
     }
@@ -408,7 +586,8 @@ macro_rules! define_opcode {
       {
         hermes::encode::encode_u8(_w, self.op);
         $(
-          map_encode_fn!($arg)(_w, self.$field as _);
+          // map_encode_fn!($arg)(_w, self.$field as _);
+          map_encode_fn!($arg)(_w, self.$field.into());
         )*
       }
 
@@ -424,14 +603,39 @@ macro_rules! define_opcode {
 
     #[allow(unused_mut, unused_assignments)]
     fn get_address_field(&self) -> u32 {
-      let mut val = 0;
+      let mut val: u32 = 0;
+
       $(
         val = match stringify!($arg) {
-          "Addr8" | "Addr32" => self.$field as u32,
+          // "Addr8" | "Addr32" => self.$field as u32,
+          "Addr8" | "Addr32" => self.$field.into(),
           _ => 0
         };
       )*
-      val
+      val as u32
+
+    }
+
+    fn get_string_field_names(&self) -> Vec<&str> {
+      #[allow(unused_mut)]
+      let mut fields = vec![];
+      $(
+        if stringify!($arg).contains("StringID") {
+          fields.push(stringify!($field));
+        }
+      )*
+      fields
+    }
+
+    fn get_function_field_names(&self) -> Vec<&str> {
+      #[allow(unused_mut)]
+      let mut fields = vec![];
+      $(
+        if stringify!($arg).contains("FunctionID") {
+          fields.push(stringify!($field));
+        }
+      )*
+      fields
     }
 
     #[allow(unused_mut)]
@@ -441,10 +645,10 @@ macro_rules! define_opcode {
       let mut display_string = format!("{} ", op_to_str(self.op));
       $(
           display_string = match stringify!($arg) {
-            "StringIDUInt8" | "StringIDUInt16" | "StringIDUInt32" => format!("{} \"{}\"", display_string, _hermes.get_string_from_storage_by_index(self.$field as usize)),
+            "StringIDUInt8" | "StringIDUInt16" | "StringIDUInt32" => format!("{} \"{}\"", display_string, _hermes.get_string_from_storage_by_index(self.$field.into())),
             "FunctionIDUInt8" | "FunctionIDUInt16" | "FunctionIDUInt32" => {
-
-              let target_function = _hermes.function_headers[self.$field as usize].func_name();
+              let index: usize = Into::<usize>::into(self.$field);
+              let target_function = _hermes.function_headers[index].func_name();
               let func_str = _hermes
                   .get_string_from_storage_by_index(target_function as usize)
                   .to_string();
@@ -458,7 +662,8 @@ macro_rules! define_opcode {
             },
             "BigIntIDUInt16" | "BigIntIDUInt32" => {
               // TODO: Make this work
-              let bigint_addr = self.$field as usize;
+              // let bigint_addr = self.$field.into() as usize;
+              let bigint_addr: usize = Into::<usize>::into(self.$field);
               format!("{} {} ", display_string, bigint_addr)
             },
             _ => {
@@ -530,6 +735,22 @@ macro_rules! impl_instruction_parser {
         }
       }
 
+      fn get_string_field_names(&self) -> Vec<&str> {
+        match self {
+          $(
+            Instruction::$insn(insn) => insn.get_string_field_names(),
+          )*
+        }
+      }
+
+      fn get_function_field_names(&self) -> Vec<&str> {
+        match self {
+          $(
+            Instruction::$insn(insn) => insn.get_string_field_names(),
+          )*
+        }
+      }
+
       fn size(&self) -> usize {
         match self {
           $(
@@ -554,13 +775,15 @@ macro_rules! impl_instruction_parser {
         }
       }
   }
-};
+}
 }
 
 #[macro_export]
 macro_rules! build_instructions {
 ($(($opcode:expr, $instruction:ident, $($operand:ident : $type:ident),*)),*) => {
     use std::io;
+    #[allow(unused_imports)]
+    use hermes::types::{Reg8, Reg32, UInt8, UInt16, UInt32, Addr8, Addr32, Imm32, Double, StringIDUInt8, StringIDUInt16, StringIDUInt32, FunctionIDUInt8, FunctionIDUInt16, FunctionIDUInt32, BigIntIDUInt16, BigIntIDUInt32};
 
     $(define_opcode!($instruction, $($operand : $type),*);)*
 
@@ -622,6 +845,10 @@ macro_rules! build_instructions {
 }
 
 // End macro definitions
+#[cfg(feature = "v84")]
+#[macro_use]
+pub mod v84;
+
 #[cfg(feature = "v89")]
 #[macro_use]
 pub mod v89;
@@ -648,8 +875,10 @@ pub mod v96;
 
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum HermesInstruction {
+    #[cfg(feature = "v84")]
+    V84(v84::Instruction),
     #[cfg(feature = "v89")]
     V89(v89::Instruction),
     #[cfg(feature = "v90")]
@@ -670,6 +899,8 @@ impl HermesInstruction {
         R: io::Read + io::BufRead + io::Seek,
     {
         match self {
+            #[cfg(feature = "v84")]
+            HermesInstruction::V84(instruction) => instruction.display(_hermes),
             #[cfg(feature = "v89")]
             HermesInstruction::V89(instruction) => instruction.display(_hermes),
             #[cfg(feature = "v90")]
@@ -687,6 +918,8 @@ impl HermesInstruction {
 
     pub fn is_jmp(&self) -> bool {
         match self {
+            #[cfg(feature = "v84")]
+            HermesInstruction::V84(instruction) => instruction.is_jmp(),
             #[cfg(feature = "v89")]
             HermesInstruction::V89(instruction) => instruction.is_jmp(),
             #[cfg(feature = "v90")]
@@ -704,6 +937,8 @@ impl HermesInstruction {
 
     pub fn get_address_field(&self) -> u32 {
         match self {
+            #[cfg(feature = "v84")]
+            HermesInstruction::V84(instruction) => instruction.get_address_field(),
             #[cfg(feature = "v89")]
             HermesInstruction::V89(instruction) => instruction.get_address_field(),
             #[cfg(feature = "v90")]
@@ -721,6 +956,8 @@ impl HermesInstruction {
 
     pub fn size(&self) -> usize {
         match self {
+            #[cfg(feature = "v84")]
+            HermesInstruction::V84(instruction) => instruction.size(),
             #[cfg(feature = "v89")]
             HermesInstruction::V89(instruction) => instruction.size(),
             #[cfg(feature = "v90")]
@@ -741,6 +978,8 @@ impl HermesInstruction {
         W: std::io::Write,
     {
         match self {
+            #[cfg(feature = "v84")]
+            HermesInstruction::V84(instruction) => instruction.serialize(w),
             #[cfg(feature = "v89")]
             HermesInstruction::V89(instruction) => instruction.serialize(w),
             #[cfg(feature = "v90")]
@@ -761,6 +1000,8 @@ impl HermesInstruction {
         R: io::Read + io::BufRead + io::Seek,
     {
         match op {
+            #[cfg(feature = "v84")]
+            89 => HermesInstruction::V84(v84::Instruction::deserialize(r, op)),
             #[cfg(feature = "v89")]
             89 => HermesInstruction::V89(v89::Instruction::deserialize(r, op)),
             #[cfg(feature = "v90")]
@@ -780,6 +1021,13 @@ impl HermesInstruction {
 
 pub trait IntoParentInstruction {
     fn into_parent(self) -> HermesInstruction;
+}
+
+#[cfg(feature = "v84")]
+impl IntoParentInstruction for v84::Instruction {
+    fn into_parent(self) -> HermesInstruction {
+        HermesInstruction::V84(self)
+    }
 }
 
 #[cfg(feature = "v89")]
@@ -873,6 +1121,25 @@ macro_rules! define_instructions {
                 }),
             )*
         ])
+      }
+  };
+}
+
+#[macro_export]
+macro_rules! define_instructions_alt {
+  ($version:path, $($instr:ident { $($field:ident: $value:expr),* }),* $(,)?) => {
+      {
+          use $version::{str_to_op, Instruction};
+          use $version::*;
+
+          Some(vec![
+              $(
+                  Instruction::$instr ($instr{
+                      op: str_to_op(stringify!($instr)),
+                      $($field: $value),*
+                  }),
+              )*
+          ])
       }
   };
 }

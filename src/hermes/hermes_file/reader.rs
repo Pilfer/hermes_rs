@@ -17,7 +17,8 @@ use crate::hermes::string_kind::StringKindEntry;
 use crate::hermes::string_table::{OverflowStringTableEntry, SmallStringTableEntry};
 use crate::hermes::{HermesInstruction, InstructionParser, Serializable};
 
-use super::{FunctionBytecode, HermesFile, HermesStructReader};
+use super::builder::StringTypePair;
+use super::{FunctionBytecode, FunctionInstructions, HermesFile, HermesStructReader};
 
 impl<R> HermesFile<R>
 where
@@ -405,8 +406,21 @@ where
                 bytecode: buf,
             });
         }
-
         output
+    }
+
+    pub fn get_instructions(&mut self) -> Vec<FunctionInstructions> {
+
+        let offsets: Vec<_> = self.function_headers.iter().map(|fh| fh.offset()).collect();
+        for (idx, _offset) in offsets.iter().enumerate() {
+            let bytecode = self.get_func_bytecode(idx as u32);
+            self.function_bytecode.push(FunctionInstructions {
+                func_index: idx as u32,
+                bytecode,
+            });
+        }
+
+        self.function_bytecode.clone()
     }
 
     // ------------------------------------------ //
@@ -414,12 +428,44 @@ where
     // ------------------------------------------ //
 
     /*
-     * Returns a vector of all the strings from the string storage
+     * Returns a vector of all the strings from the string storage - this isn't technically ordered/tagged by the string kind
      */
     pub fn get_strings(&self) -> Vec<String> {
         let mut out = vec![];
         for (idx, _) in self.string_storage.iter().enumerate() {
             out.push(self.get_string_from_storage_by_index(idx));
+        }
+        out
+    }
+
+    /*
+     * Returns a vector of all the strings from the string storage - ordered by the string kind
+     * as Hermes expects them. String -> Identifier -> Predefined.
+     */
+    pub fn get_strings_by_kind (&self) -> Vec<StringTypePair> {
+        let mut out: Vec<StringTypePair> = vec![];
+        let mut string_id = 0; // anchor
+        for kind in self.string_kinds.iter() {
+            match kind {
+                StringKindEntry::New(sk) => {
+                    for _idx in 0..sk.count {
+                        out.push(StringTypePair {
+                            string: self.get_string_from_storage_by_index(string_id),
+                            kind: sk.kind,
+                        });
+                        string_id += 1;
+                    }
+                }
+                StringKindEntry::Old(sk) => {
+                    for _idx in 0..sk.count {
+                        out.push(StringTypePair {
+                            string: self.get_string_from_storage_by_index(string_id),
+                            kind: sk.kind,
+                        });
+                        string_id += 1;
+                    }
+                }
+            }
         }
         out
     }

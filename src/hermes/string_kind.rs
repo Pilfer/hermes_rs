@@ -166,7 +166,7 @@ impl Serializable for StringKindEntryOld {
 
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum StringKind {
     String,
     Identifier,

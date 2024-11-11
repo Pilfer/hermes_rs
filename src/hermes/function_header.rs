@@ -537,6 +537,13 @@ impl FunctionHeader {
         }
     }
 
+    pub fn set_func_name(&mut self, string_index: u32) {
+        match self {
+            FunctionHeader::Small(fh) => fh.func_name = string_index,
+            FunctionHeader::Large(fh) => fh.func_name = string_index,
+        }
+    }
+
     pub fn set_info_offset(&mut self, offset: u32) {
         match self {
             FunctionHeader::Small(fh) => fh.info_offset = offset,

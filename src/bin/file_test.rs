@@ -8,7 +8,6 @@ fn main() {
     let mut reader = io::BufReader::new(f);
 
     let mut hermes_file = HermesFile::deserialize(&mut reader);
-
     hermes_file.print_bytecode();
 
     /*

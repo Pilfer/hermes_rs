@@ -291,8 +291,11 @@ where
 
         self.write_header(w);
 
+        println!("Writing function headers...");
+
         w.seek(io::SeekFrom::Start(footer_offset)).unwrap();
         self.write_footer(w);
+        println!("Wrote footer?");
     }
 
     // pub fn write_<W>(&self, w: &mut W) where W: Write + io::Seek, {}
@@ -512,7 +515,7 @@ where
     where
         W: Write + io::Seek + Read + BufRead,
     {
-        align_writer(w, 4);
+        // align_writer(w, 4);
         let pos = w.stream_position().unwrap();
         let mut executable_bytes = vec![];
         w.seek(io::SeekFrom::Start(0)).unwrap();
@@ -522,6 +525,14 @@ where
         let mut hasher = Sha1::new();
         hasher.update(&executable_bytes);
         self.footer = hasher.finalize().into();
+        
+        // Debug
+        let _footer_hash_hex = self
+            .footer
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>();
+
         w.write_all(&self.footer).unwrap();
     }
 }
