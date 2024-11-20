@@ -16,3 +16,5 @@ TODO.md
 # mini kitchen sink apps for testing - no need to push this publicly
 wasm
 ts
+
+examples/merge*

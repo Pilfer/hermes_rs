@@ -44,7 +44,7 @@ pub struct FunctionBytecode {
 
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionInstructions {
     pub func_index: u32,
     pub bytecode: Vec<HermesInstruction>,
@@ -61,7 +61,7 @@ pub struct HermesFile<R> {
     offsets: HermesOffsets,
 
     // We use this to keep track of the bytecode for each function
-    function_bytecode: Vec<FunctionInstructions>,
+    pub function_bytecode: Vec<FunctionInstructions>,
 
     /*
      * Hermes file format

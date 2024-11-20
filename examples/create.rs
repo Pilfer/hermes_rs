@@ -51,7 +51,6 @@ fn main() {
             has_async: false,
             flags: false,
         },
-        _padding: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     };
 
     hermes_file.set_strings(vec![
@@ -67,12 +66,12 @@ fn main() {
             offset: 0,
             param_count: 1,
             byte_size: 10,
-            func_name: 1,
+            func_name: 0,
             info_offset: 188,
             frame_size: 95,
             env_size: 96,
             highest_read_cache_index: 97,
-            highest_write_cache_index: 200000, // intentionally set to something large to overflow it
+            highest_write_cache_index: 98, // intentionally set to something large to overflow it
             flags: FunctionHeaderFlag {
                 prohibit_invoke: hermes_rs::FunctionHeaderFlagProhibitions::ProhibitNone,
                 strict_mode: false,
@@ -89,20 +88,26 @@ fn main() {
         }),
         &mut define_instructions!(
             hermes_rs::v96,
-            LoadConstString { r0: 0, p0: 1 }, // load the string "print(123);" into r0
+            LoadConstString {
+                r0: 0.into(),
+                p0: 1.into()
+            }, // load the string "print(123);" into r0
             DirectEval {
-                r0: 0,
-                r1: 0,
-                p0: 0
+                r0: 0.into(),
+                r1: 0.into(),
+                p0: 0.into()
             },
-            LoadConstString { r0: 0, p0: 2 }, // load the string "print(1+1);" into r0
+            LoadConstString {
+                r0: 0.into(),
+                p0: 2.into()
+            }, // load the string "print(1+1);" into r0
             DirectEval {
-                r0: 0,
-                r1: 0,
-                p0: 0
+                r0: 0.into(),
+                r1: 0.into(),
+                p0: 0.into()
             },
             AsyncBreakCheck {},
-            Ret { r0: 0 },
+            Ret { r0: 0.into() },
         )
         .unwrap(),
     );
@@ -131,15 +136,21 @@ fn main() {
         }),
         &mut define_instructions!(
             hermes_rs::v96,
-            LoadConstString { r0: 0, p0: 2 }, // load the string "print(123);" into r0
-            LoadConstString { r0: 0, p0: 1 }, // load the string "print(123);" into r0
+            LoadConstString {
+                r0: 0.into(),
+                p0: 2.into()
+            }, // load the string "print(123);" into r0
+            LoadConstString {
+                r0: 0.into(),
+                p0: 1.into()
+            }, // load the string "print(123);" into r0
             DirectEval {
-                r0: 0,
-                r1: 0,
-                p0: 0
+                r0: 0.into(),
+                r1: 0.into(),
+                p0: 0.into()
             },
             AsyncBreakCheck {},
-            Ret { r0: 0 },
+            Ret { r0: 0.into() },
         )
         .unwrap(),
     );

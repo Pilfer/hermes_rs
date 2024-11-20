@@ -66,7 +66,6 @@ fn main() {
             has_async: false,
             flags: false,
         },
-        _padding: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     };
 
     // Set the strings section for this executable. It also updates the string counts etc.

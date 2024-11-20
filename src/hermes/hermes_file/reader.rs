@@ -17,7 +17,8 @@ use crate::hermes::string_kind::StringKindEntry;
 use crate::hermes::string_table::{OverflowStringTableEntry, SmallStringTableEntry};
 use crate::hermes::{HermesInstruction, InstructionParser, Serializable};
 
-use super::{FunctionBytecode, HermesFile, HermesStructReader};
+use super::builder::StringTypePair;
+use super::{FunctionBytecode, FunctionInstructions, HermesFile, HermesStructReader};
 
 impl<R> HermesFile<R>
 where
@@ -119,23 +120,22 @@ where
     pub fn visit_function_headers(&mut self) {
         for _ in 0..self.header.function_count {
             let _initpos = self._reader.stream_position().unwrap();
-            let sfh = SmallFunctionHeader::deserialize(&mut self._reader, self.header.version);
+            let mut sfh = SmallFunctionHeader::deserialize(&mut self._reader, self.header.version);
             let anchor_pos = _initpos + sfh.size() as u64;
 
             // Check if we're dealing with a Small or Large Function Header.
             // Overflowed = Large Function Header
             let function_header_val: FunctionHeader = if !sfh.flags.overflowed {
-                let mut sfh = FunctionHeader::Small(sfh);
                 // if has_exception_handler and debug_info, navigate to infooffset
-                if sfh.flags().has_exception_handler || sfh.flags().has_debug_info {
+                if sfh.flags.has_exception_handler || sfh.flags.has_debug_info {
                     self._reader
-                        .seek(io::SeekFrom::Start(sfh.info_offset() as u64))
+                        .seek(io::SeekFrom::Start(sfh.info_offset as u64))
                         .expect("unable to seek to overflowed function header");
                 }
 
                 // read exception info and debug_info here
                 let mut exception_handlers: Vec<ExceptionHandlerInfo> = vec![];
-                if sfh.flags().has_exception_handler {
+                if sfh.flags.has_exception_handler {
                     align_reader(&mut self._reader, 4).unwrap();
 
                     let exception_handler_count = decode_u32(&mut self._reader);
@@ -147,9 +147,9 @@ where
                     }
                 };
 
-                sfh.set_exception_handlers(exception_handlers);
+                sfh.exception_handlers = exception_handlers;
 
-                let debug_info = if sfh.flags().has_debug_info {
+                let debug_info = if sfh.flags.has_debug_info {
                     let _current_pos = self._reader.stream_position().unwrap();
 
                     // Read the debug info
@@ -167,12 +167,11 @@ where
                     None
                 };
 
-                sfh.set_debug_info(debug_info);
+                sfh.debug_info = debug_info;
 
-                sfh
+                FunctionHeader::Small(sfh)
             } else {
                 let new_offset = sfh.info_offset << 16 | sfh.offset;
-
                 // Go back to the start of the LFH to deserialize it properly
                 self._reader
                     .seek(io::SeekFrom::Start(new_offset as u64))
@@ -405,8 +404,20 @@ where
                 bytecode: buf,
             });
         }
-
         output
+    }
+
+    pub fn get_instructions(&mut self) -> Vec<FunctionInstructions> {
+        let offsets: Vec<_> = self.function_headers.iter().map(|fh| fh.offset()).collect();
+        for (idx, _offset) in offsets.iter().enumerate() {
+            let bytecode = self.get_func_bytecode(idx as u32);
+            self.function_bytecode.push(FunctionInstructions {
+                func_index: idx as u32,
+                bytecode,
+            });
+        }
+
+        self.function_bytecode.clone()
     }
 
     // ------------------------------------------ //
@@ -414,12 +425,44 @@ where
     // ------------------------------------------ //
 
     /*
-     * Returns a vector of all the strings from the string storage
+     * Returns a vector of all the strings from the string storage - this isn't technically ordered/tagged by the string kind
      */
     pub fn get_strings(&self) -> Vec<String> {
         let mut out = vec![];
         for (idx, _) in self.string_storage.iter().enumerate() {
             out.push(self.get_string_from_storage_by_index(idx));
+        }
+        out
+    }
+
+    /*
+     * Returns a vector of all the strings from the string storage - ordered by the string kind
+     * as Hermes expects them. String -> Identifier -> Predefined.
+     */
+    pub fn get_strings_by_kind(&self) -> Vec<StringTypePair> {
+        let mut out: Vec<StringTypePair> = vec![];
+        let mut string_id = 0; // anchor
+        for kind in self.string_kinds.iter() {
+            match kind {
+                StringKindEntry::New(sk) => {
+                    for _idx in 0..sk.count {
+                        out.push(StringTypePair {
+                            string: self.get_string_from_storage_by_index(string_id),
+                            kind: sk.kind,
+                        });
+                        string_id += 1;
+                    }
+                }
+                StringKindEntry::Old(sk) => {
+                    for _idx in 0..sk.count {
+                        out.push(StringTypePair {
+                            string: self.get_string_from_storage_by_index(string_id),
+                            kind: sk.kind,
+                        });
+                        string_id += 1;
+                    }
+                }
+            }
         }
         out
     }
@@ -476,6 +519,10 @@ where
             let mut r_cursor = io::Cursor::new(byte_iter.as_slice());
 
             let ins_obj: Option<HermesInstruction> = match self.header.version {
+                #[cfg(feature = "v84")]
+                84 => Some(HermesInstruction::V84(
+                    crate::hermes::v84::Instruction::deserialize(&mut r_cursor, op),
+                )),
                 #[cfg(feature = "v89")]
                 89 => Some(HermesInstruction::V89(
                     crate::hermes::v89::Instruction::deserialize(&mut r_cursor, op),
@@ -717,6 +764,10 @@ where
 
                     // Deserialize the instruction
                     let ins_obj: Option<HermesInstruction> = match self.header.version {
+                        #[cfg(feature = "v84")]
+                        84 => Some(HermesInstruction::V84(
+                            crate::hermes::v84::Instruction::deserialize(&mut r_cursor, op),
+                        )),
                         #[cfg(feature = "v89")]
                         89 => Some(HermesInstruction::V89(
                             crate::hermes::v89::Instruction::deserialize(&mut r_cursor, op),
