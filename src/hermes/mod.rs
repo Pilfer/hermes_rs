@@ -9,11 +9,11 @@ pub mod function_header;
 pub mod function_sources;
 pub mod header;
 pub mod hermes_file;
+pub mod jenkins;
 pub mod regexp_table;
 pub mod string_kind;
 pub mod string_table;
 pub mod types;
-pub mod jenkins;
 
 use std::io;
 
@@ -438,16 +438,16 @@ macro_rules! map_encode_fn {
 
 #[macro_export]
 macro_rules! get_field {
-  ($struct:expr, $field:ident) => {
-      $struct.$field
-  };
+    ($struct:expr, $field:ident) => {
+        $struct.$field
+    };
 }
 
 #[macro_export]
 macro_rules! set_field {
-  ($struct:expr, $field:ident, $value:expr) => {
-      $struct.$field = $value;
-  };
+    ($struct:expr, $field:ident, $value:expr) => {
+        $struct.$field = $value;
+    };
 }
 
 #[macro_export]

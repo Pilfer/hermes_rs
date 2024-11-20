@@ -51,7 +51,6 @@ fn main() {
             has_async: false,
             flags: false,
         },
-        _padding: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     };
 
     hermes_file.set_strings(vec![
@@ -89,13 +88,19 @@ fn main() {
         }),
         &mut define_instructions!(
             hermes_rs::v96,
-            LoadConstString { r0: 0.into(), p0: 1.into() }, // load the string "print(123);" into r0
+            LoadConstString {
+                r0: 0.into(),
+                p0: 1.into()
+            }, // load the string "print(123);" into r0
             DirectEval {
                 r0: 0.into(),
                 r1: 0.into(),
                 p0: 0.into()
             },
-            LoadConstString { r0: 0.into(), p0: 2.into() }, // load the string "print(1+1);" into r0
+            LoadConstString {
+                r0: 0.into(),
+                p0: 2.into()
+            }, // load the string "print(1+1);" into r0
             DirectEval {
                 r0: 0.into(),
                 r1: 0.into(),
@@ -131,8 +136,14 @@ fn main() {
         }),
         &mut define_instructions!(
             hermes_rs::v96,
-            LoadConstString { r0: 0.into(), p0: 2.into() }, // load the string "print(123);" into r0
-            LoadConstString { r0: 0.into(), p0: 1.into() }, // load the string "print(123);" into r0
+            LoadConstString {
+                r0: 0.into(),
+                p0: 2.into()
+            }, // load the string "print(123);" into r0
+            LoadConstString {
+                r0: 0.into(),
+                p0: 1.into()
+            }, // load the string "print(123);" into r0
             DirectEval {
                 r0: 0.into(),
                 r1: 0.into(),

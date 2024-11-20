@@ -525,7 +525,7 @@ where
         let mut hasher = Sha1::new();
         hasher.update(&executable_bytes);
         self.footer = hasher.finalize().into();
-        
+
         // Debug
         let _footer_hash_hex = self
             .footer

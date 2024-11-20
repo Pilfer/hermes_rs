@@ -4,7 +4,10 @@ fn main() {
     // Use the define_instructions macro. The first parameter is the hermes version
     let instructions = define_instructions!(
         hermes_rs::v96,
-        LoadConstString { r0: 0.into(), p0: 1.into() },
+        LoadConstString {
+            r0: 0.into(),
+            p0: 1.into()
+        },
         DirectEval {
             r0: 0.into(),
             r1: 0.into(),

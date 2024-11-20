@@ -2,8 +2,21 @@
 
 Note: Still a WIP - A PR is always welcome.  
 
+The API is subject to change as I iterate over use cases and improve the design. 
 
-A *nearly* dependency-free disassembler and assembler for the Hermes bytecode, written in Rust. 
+
+A *nearly* dependency-free disassembler and assembler for the Hermes bytecode, written in Rust.  
+
+For the sake transparency, the current dependencies are:  
+
+- `sha1`  
+  - This is required for generating the footer hash. 
+- `serde` - Optional  
+  - So you can serialize/deserialize in your app  
+- `specta` - Optional  
+  - To generate TS types for tauri or wasm use cases  
+- `specta-util` - Optional  
+  - Same as above  
 
 A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging through the Hermes git repo, pulling all of the BytecodeDef files out, and tagging them. This made writing this tool much easier.
 
@@ -129,7 +142,6 @@ HermesHeader {
     has_async: false,
     flags: false
   },
-  _padding: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 }
 ```
 
@@ -255,16 +267,16 @@ use hermes_rs::{define_instructions, InstructionParser};
 /*
  * Use the define_instructions macro to get a vec of the correct instructions
  * for the version of Hermes you're targeting.
-* The first parameter is the hermes version you'd like to use.
-*
-* The bytecode below represents: eval(`print(123);`)
-* The `print(123)` string is the second (index 1) string in the string table.
+ * The first parameter is the hermes version you'd like to use.
+ *
+ * The bytecode below represents: eval(`print(123);`)
+ * The `print(123)` string is the second (index 1) string in the string table.
 */
 let instructions = define_instructions!(
     hermes_rs::v96,
-    LoadConstString { r0: 0, p0: 1 },   // Load `print(123);` into r0
-    DirectEval { r0: 0, r1: 0, p0: 0 }, // Evaluate the string
-    Ret { r0: 0 },                      // Return
+    LoadConstString { r0: 0.into(), p0: 1.into() },   // Load `print(123);` into r0
+    DirectEval { r0: 0.into(), r1: 0.into(), p0: 0.into() }, // Evaluate the string
+    Ret { r0: 0.into() },                      // Return
 ).unwrap();
 
 let mut writer = Vec::new();

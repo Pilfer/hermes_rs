@@ -3,7 +3,7 @@ use std::io;
 use crate::hermes::bytecode_options::BytecodeOptions;
 
 use crate::hermes::decode::{align_reader, decode_u32, decode_u64};
-use crate::hermes::encode::{encode_u32, encode_u64};
+use crate::hermes::encode::{align_writer, encode_u32, encode_u64};
 use crate::hermes::Serializable;
 
 #[cfg_attr(feature = "specta", derive(specta::Type))]
@@ -36,7 +36,6 @@ pub struct HermesHeader {
     pub debug_info_offset: u32,
 
     pub options: BytecodeOptions,
-    pub _padding: [u8; 19],
 }
 
 impl Default for HermesHeader {
@@ -72,7 +71,6 @@ impl HermesHeader {
             function_source_count: 0,
             debug_info_offset: 0,
             options: BytecodeOptions::new(),
-            _padding: [0; 19],
         }
     }
 }
@@ -104,6 +102,7 @@ impl HermesStructReader for HermesHeader {
         let mut sha1_bytes = [0u8; 20];
         r.read_exact(&mut sha1_bytes)
             .expect("Could not read sha1 bytes");
+
         let sha1 = sha1_bytes;
         let file_length = decode_u32(r);
         let global_code_index = decode_u32(r);
@@ -113,8 +112,11 @@ impl HermesStructReader for HermesHeader {
         let string_count = decode_u32(r);
         let overflow_string_count = decode_u32(r);
         let string_storage_size = decode_u32(r);
-        let big_int_count = decode_u32(r);
-        let big_int_storage_size = decode_u32(r);
+
+        // Big int count and storage size are only present in version >= 87
+        let big_int_count = if version >= 87 { decode_u32(r) } else { 0 };
+        let big_int_storage_size = if version >= 87 { decode_u32(r) } else { 0 };
+
         let reg_exp_count = decode_u32(r);
         let reg_exp_storage_size = decode_u32(r);
         let array_buffer_size = decode_u32(r);
@@ -124,12 +126,14 @@ impl HermesStructReader for HermesHeader {
         let mut cjs_module_offset = 0;
         let mut segment_id = 0;
 
+        // cjs_module_offset is only present in version < 78, otherwise it's segment_id
         if version < 78 {
             cjs_module_offset = decode_u32(r);
         } else {
             segment_id = decode_u32(r);
         }
 
+        // cjs_module_count is only present in version >= 84
         let mut cjs_module_count = 0;
         if version >= 84 {
             cjs_module_count = decode_u32(r);
@@ -140,12 +144,8 @@ impl HermesStructReader for HermesHeader {
 
         let options = BytecodeOptions::deserialize(r, version);
 
-        // Read padding bytes
-        let mut _pad_bytes = [0u8; 19];
-        r.read_exact(&mut _pad_bytes)
-            .expect("error reading padding bytes");
-
-        align_reader(r, 4).unwrap();
+        // Align to 32 bytes
+        align_reader(r, 32).unwrap();
 
         Self {
             magic,
@@ -172,7 +172,6 @@ impl HermesStructReader for HermesHeader {
             function_source_count,
             debug_info_offset,
             options,
-            _padding: _pad_bytes,
         }
     }
 
@@ -214,9 +213,8 @@ impl HermesStructReader for HermesHeader {
 
         self.options.serialize(w);
 
-        // Write padding bytes
-        w.write_all(&self._padding)
-            .expect("unable to write padding bytes");
+        // Align to 32 bytes
+        align_writer(w, 32);
     }
 
     // Read string

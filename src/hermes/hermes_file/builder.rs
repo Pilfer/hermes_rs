@@ -5,11 +5,13 @@ use super::HermesFile;
 use crate::hermes::big_int_table::BigIntTableEntry;
 use crate::hermes::debug_info::DebugStringTable;
 use crate::hermes::function_header::{FunctionHeader, LargeFunctionHeader, SmallFunctionHeader};
+use crate::hermes::string_kind::{
+    StringKind, StringKindEntry, StringKindEntryNew, StringKindEntryOld,
+};
 use crate::hermes::IntoParentInstruction;
 use crate::hermes::OverflowStringTableEntry;
 use crate::hermes::SmallStringTableEntry;
 use crate::hermes::{HermesInstruction, InstructionParser};
-use crate::hermes::string_kind::{StringKind, StringKindEntry, StringKindEntryNew, StringKindEntryOld};
 
 #[derive(Debug, Clone)]
 pub struct StringTypePair {
@@ -21,26 +23,24 @@ impl<R> HermesFile<R>
 where
     R: io::Read + io::BufRead + io::Seek,
 {
-
     pub fn push_string_kind(&mut self, kind: StringKind, count: u32) {
         if count > 0 {
             let sk = if self.header.version <= 71 {
-                StringKindEntry::Old(StringKindEntryOld {
-                    kind,
-                    count,
-                })
+                StringKindEntry::Old(StringKindEntryOld { kind, count })
             } else {
-                StringKindEntry::New(StringKindEntryNew {
-                    kind,
-                    count,
-                })
+                StringKindEntry::New(StringKindEntryNew { kind, count })
             };
             self.string_kinds.push(sk);
         }
     }
 
     // TODO: need to append identifiers
-    pub fn set_strings_ordered(&mut self, strings: Vec<StringTypePair>, identifiers: Vec<StringTypePair>, predefined: Vec<StringTypePair>) {
+    pub fn set_strings_ordered(
+        &mut self,
+        strings: Vec<StringTypePair>,
+        identifiers: Vec<StringTypePair>,
+        predefined: Vec<StringTypePair>,
+    ) {
         let mut string_storage: Vec<SmallStringTableEntry> = vec![];
         let mut string_storage_bytes: Vec<u8> = vec![];
 
@@ -53,7 +53,7 @@ where
             let is_utf_16 = string.chars().any(|c| c as u32 > 0x10000);
             let offset = string_storage_bytes.len() as u32;
             let length = string.len() as u32;
-            
+
             string_storage.push(SmallStringTableEntry {
                 is_utf_16,
                 offset,
@@ -70,7 +70,7 @@ where
             let is_utf_16 = string.chars().any(|c| c as u32 > 0x10000);
             let offset = string_storage_bytes.len() as u32;
             let length = string.len() as u32;
-            
+
             string_storage.push(SmallStringTableEntry {
                 is_utf_16,
                 offset,
@@ -87,7 +87,7 @@ where
             let is_utf_16 = string.chars().any(|c| c as u32 > 0x10000);
             let offset = string_storage_bytes.len() as u32;
             let length = string.len() as u32;
-            
+
             string_storage.push(SmallStringTableEntry {
                 is_utf_16,
                 offset,
@@ -139,22 +139,18 @@ where
         self.header.string_count = ssl;
         for sk in self.string_kinds.iter_mut() {
             match sk {
-                StringKindEntry::Old(old) => {
-                    match old.kind {
-                        StringKind::String => {
-                            old.count = self.header.string_count;
-                        },
-                        _ => {}
+                StringKindEntry::Old(old) => match old.kind {
+                    StringKind::String => {
+                        old.count = self.header.string_count;
                     }
-                }
-                StringKindEntry::New(new) => {
-                    match new.kind {
-                        StringKind::String => {
-                            new.count = self.header.string_count;
-                        },
-                        _ => {}
+                    _ => {}
+                },
+                StringKindEntry::New(new) => match new.kind {
+                    StringKind::String => {
+                        new.count = self.header.string_count;
                     }
-                }
+                    _ => {}
+                },
             }
         }
 
