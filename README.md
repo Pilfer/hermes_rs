@@ -78,6 +78,11 @@ A couple of features are missing currently, as they're low priority for me at th
 - Assemble Hermes Bytecode (HBC)  
 - Type-safe instruction building across multiple versions of HBC  
 - The ability to reduce binary size by [only enabling certain versions of HBC](#using-specific-hbc-versions)
+- **Utilities**  
+  - Dump Bytecode  
+    - `cargo run --bin bytecode index.android.bundle`  
+  - Dump Strings  
+    - `cargo run --bin strings index.android.bundle`  
 
 ## Installation
 
