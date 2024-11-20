@@ -108,20 +108,20 @@ fn main() {
         // Define the actual code for this function.
         &mut define_instructions!(
             hermes_rs::v96,
-            LoadConstString { r0: 0, p0: 1 }, // load the string "print(123);" into r0
+            LoadConstString { r0: 0.into(), p0: 1.into() }, // load the string "print(123);" into r0
             DirectEval {
-                r0: 0,
-                r1: 0,
-                p0: 0
+                r0: 0.into(),
+                r1: 0.into(),
+                p0: 0.into()
             },
-            LoadConstString { r0: 0, p0: 2 }, // load the string "print(1+1);" into r0
+            LoadConstString { r0: 0.into(), p0: 2.into() }, // load the string "print(1+1);" into r0
             DirectEval {
-                r0: 0,
-                r1: 0,
-                p0: 0
+                r0: 0.into(),
+                r1: 0.into(),
+                p0: 0.into()
             },
             AsyncBreakCheck {},
-            Ret { r0: 0 },
+            Ret { r0: 0.into() },
         )
         .unwrap(),
     );
@@ -151,15 +151,15 @@ fn main() {
         }),
         &mut define_instructions!(
             hermes_rs::v96,
-            LoadConstString { r0: 0, p0: 2 }, // load the string "print(123);" into r0
-            LoadConstString { r0: 0, p0: 1 }, // load the string "print(123);" into r0
+            LoadConstString { r0: 0.into(), p0: 2.into() }, // load the string "print(123);" into r0
+            LoadConstString { r0: 0.into(), p0: 1.into() }, // load the string "print(123);" into r0
             DirectEval {
-                r0: 0,
-                r1: 0,
-                p0: 0
+                r0: 0.into(),
+                r1: 0.into(),
+                p0: 0.into()
             },
             AsyncBreakCheck {},
-            Ret { r0: 0 },
+            Ret { r0: 0.into() },
         )
         .unwrap(),
     );
