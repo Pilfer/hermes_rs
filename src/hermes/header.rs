@@ -133,13 +133,10 @@ impl HermesStructReader for HermesHeader {
             segment_id = decode_u32(r);
         }
 
-        // cjs_module_count is only present in version >= 84
-        let mut cjs_module_count = 0;
-        if version >= 84 {
-            cjs_module_count = decode_u32(r);
-        }
+        let cjs_module_count = decode_u32(r);
 
-        let function_source_count = decode_u32(r);
+        let function_source_count = if version >= 84 { decode_u32(r) } else { 0 };
+
         let debug_info_offset = decode_u32(r);
 
         let options = BytecodeOptions::deserialize(r, version);
@@ -190,8 +187,12 @@ impl HermesStructReader for HermesHeader {
         encode_u32(w, self.string_count);
         encode_u32(w, self.overflow_string_count);
         encode_u32(w, self.string_storage_size);
-        encode_u32(w, self.big_int_count);
-        encode_u32(w, self.big_int_storage_size);
+
+        if self.version >= 87 {
+            encode_u32(w, self.big_int_count);
+            encode_u32(w, self.big_int_storage_size);
+        }
+
         encode_u32(w, self.reg_exp_count);
         encode_u32(w, self.reg_exp_storage_size);
         encode_u32(w, self.array_buffer_size);
@@ -205,10 +206,10 @@ impl HermesStructReader for HermesHeader {
         }
 
         encode_u32(w, self.cjs_module_count);
-        if self.version >= 84 {
-            encode_u32(w, self.cjs_module_count);
-        }
 
+        if self.version >= 84 {
+            encode_u32(w, self.function_source_count);
+        }
         encode_u32(w, self.debug_info_offset);
 
         self.options.serialize(w);

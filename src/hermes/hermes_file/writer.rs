@@ -96,7 +96,10 @@ where
 
         c = align_offset(c);
         let function_source_table_offset = c;
-        c += 8 * self.header.function_source_count as u64;
+
+        if self.header.version >= 84 {
+            c += 8 * self.header.function_source_count as u64;
+        }
 
         c = align_offset(c);
         let bytecode_offset = c;
@@ -125,6 +128,7 @@ where
                 overflowed_function_headers_len += align_offset(overflowed_function_headers_len);
                 overflowed_function_headers_len += eh.size() as u64;
             }
+
             if fh.debug_info().is_some() {
                 overflowed_function_headers_len += align_offset(overflowed_function_headers_len);
                 overflowed_function_headers_len += fh.debug_info().unwrap().size() as u64;
@@ -220,8 +224,6 @@ where
                 .get_mut(func_pair.func_index as usize)
                 .unwrap();
 
-            let is_overflowed = fh.flags().overflowed || fh.is_overflowed_check();
-
             // Write the SmallFunctionHeader
             let sfh_offset = small_func_header_offsets
                 .iter()
@@ -235,6 +237,12 @@ where
                 .find(|(index, _)| *index == func_pair.func_index)
                 .unwrap()
                 .1;
+
+            // Do the overflow check _after_ we have the offsets.
+            let is_overflowed = fh.flags().overflowed || fh.is_overflowed_check();
+            if is_overflowed {
+                fh.set_overflowed(true);
+            }
 
             fh.set_info_offset(current_offset as u32);
             fh.set_offset(bytecode_offset as u32);
@@ -288,14 +296,10 @@ where
 
         w.seek(io::SeekFrom::Start(0)).unwrap();
         self.update_header();
-
         self.write_header(w);
-
-        println!("Writing function headers...");
 
         w.seek(io::SeekFrom::Start(footer_offset)).unwrap();
         self.write_footer(w);
-        println!("Wrote footer?");
     }
 
     // pub fn write_<W>(&self, w: &mut W) where W: Write + io::Seek, {}

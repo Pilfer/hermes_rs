@@ -186,50 +186,116 @@ impl Serializable for SmallFunctionHeader {
         let mut func_header_bytes = [0u8; 16];
 
         write_bitfield(&mut func_header_bytes, 0, 25, self.offset);
-        write_bitfield(&mut func_header_bytes, 25, 7, self.param_count);
-        write_bitfield(&mut func_header_bytes, 32, 15, self.byte_size);
-        write_bitfield(&mut func_header_bytes, 47, 17, self.func_name);
+        write_bitfield(
+            &mut func_header_bytes,
+            25,
+            7,
+            if self.flags.overflowed {
+                0
+            } else {
+                self.param_count
+            },
+        );
+        write_bitfield(
+            &mut func_header_bytes,
+            32,
+            15,
+            if self.flags.overflowed {
+                0
+            } else {
+                self.byte_size
+            },
+        );
+        write_bitfield(
+            &mut func_header_bytes,
+            47,
+            17,
+            if self.flags.overflowed {
+                0
+            } else {
+                self.func_name
+            },
+        );
         write_bitfield(&mut func_header_bytes, 64, 25, self.info_offset);
-        write_bitfield(&mut func_header_bytes, 89, 7, self.frame_size);
-        write_bitfield(&mut func_header_bytes, 96, 8, self.env_size);
+        write_bitfield(
+            &mut func_header_bytes,
+            89,
+            7,
+            if self.flags.overflowed {
+                0
+            } else {
+                self.frame_size
+            },
+        );
+        write_bitfield(
+            &mut func_header_bytes,
+            96,
+            8,
+            if self.flags.overflowed {
+                0
+            } else {
+                self.env_size
+            },
+        );
         write_bitfield(
             &mut func_header_bytes,
             104,
             8,
-            self.highest_read_cache_index,
+            if self.flags.overflowed {
+                0
+            } else {
+                self.highest_read_cache_index
+            },
         );
         write_bitfield(
             &mut func_header_bytes,
             112,
             8,
-            self.highest_write_cache_index,
+            if self.flags.overflowed {
+                0
+            } else {
+                self.highest_write_cache_index
+            },
         );
 
         // last byte for flags
-        let mut flags_byte = [0u8];
         match self.flags.prohibit_invoke {
             FunctionHeaderFlagProhibitions::ProhibitCall => {
-                write_bitfield(&mut flags_byte, 0, 2, 0)
+                write_bitfield(&mut func_header_bytes, 120, 2, 0)
             }
             FunctionHeaderFlagProhibitions::ProhibitConstruct => {
-                write_bitfield(&mut flags_byte, 0, 2, 1)
+                write_bitfield(&mut func_header_bytes, 120, 2, 1)
             }
             FunctionHeaderFlagProhibitions::ProhibitNone => {
-                write_bitfield(&mut flags_byte, 0, 2, 2)
+                write_bitfield(&mut func_header_bytes, 120, 2, 2)
             }
         }
 
-        write_bitfield(&mut flags_byte, 2, 1, self.flags.strict_mode as u32);
         write_bitfield(
-            &mut flags_byte,
-            3,
+            &mut func_header_bytes,
+            122,
+            1,
+            if self.flags.strict_mode { 1 } else { 0 },
+        );
+        write_bitfield(
+            &mut func_header_bytes,
+            123,
             1,
             self.flags.has_exception_handler as u32,
         );
-        write_bitfield(&mut flags_byte, 4, 1, self.flags.has_debug_info as u32);
-        write_bitfield(&mut flags_byte, 5, 1, self.flags.overflowed as u32);
-
-        func_header_bytes[15] = flags_byte[0];
+        write_bitfield(
+            &mut func_header_bytes,
+            124,
+            1,
+            if self.flags.has_debug_info { 1 } else { 0 },
+        );
+        write_bitfield(
+            &mut func_header_bytes,
+            125,
+            1,
+            if self.flags.overflowed { 1 } else { 0 },
+        );
+        write_bitfield(&mut func_header_bytes, 126, 2, 0);
 
         w.write_all(&func_header_bytes)
             .expect("unable to write first word");
@@ -325,7 +391,8 @@ impl From<LargeFunctionHeader> for SmallFunctionHeader {
 }
 
 impl From<SmallFunctionHeader> for LargeFunctionHeader {
-    fn from(sfh: SmallFunctionHeader) -> Self {
+    fn from(mut sfh: SmallFunctionHeader) -> Self {
+        sfh.flags.overflowed = true;
         LargeFunctionHeader {
             offset: sfh.offset,
             param_count: sfh.param_count,
