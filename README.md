@@ -36,6 +36,7 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
       - [Using specific HBC Versions](#using-specific-hbc-versions)
 - [Hermes Resources](#hermes-resources)
 - [Development](#development)
+    - [Debugging Existing Functionality](#debugging-existing-functionality)
     - [Supporting new versions of Hermes](#supporting-new-versions-of-hermes)
 
 ### Supported HBC Versions
@@ -333,6 +334,16 @@ hermes_rs = { features = ["v89", "v90", "v93", "v94", "v95", "v96"] }
 
 # Development
 
+### Debugging Existing Functionality  
+
+My code isn't perfect, and this project is a fairly large undertaking. Because of this, you may run into some bugs. Aside from using an actual debugger with this project, the best tool to use for inspecting Hermes Bytecode files is [ImHex](https://github.com/WerWolv/ImHex) by [WerWolv](https://github.com/WerWolv).  
+
+It features an expressive pattern language that allows you to visualize binary structures with ease.
+
+I've included a [scratchpad pattern](./helpers/hermes.hexpat) to speed things up. It isn't 1:1 with this repository, but it's close enough to inspect most bits of memory to identify where things may be going wrong and why.  
+
+If you need something more verbose that includes _examples_ of instructions, see: [https://github.com/Pilfer/hermes-imhex-pattern/](https://github.com/Pilfer/hermes-imhex-pattern/). Please note that parts of that file are wrong and you may need to do some hevay lifting or code generation to support the HBC version you're targeting.
+ 
 ### Supporting new versions of Hermes
 
 This section assumes that only instructions have been modified, and not core parsing logic (struct fields, RegExp bytecode, Debug Info fields, etc). If the latter has a diff, obviously we'll need to implement those changes.  

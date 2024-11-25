@@ -6,6 +6,7 @@ use super::{HermesFile, HermesStructReader};
 use crate::hermes::cjs_module::CJSModule;
 use crate::hermes::encode::align_writer;
 use crate::hermes::encode::encode_u32;
+use crate::hermes::function_header::get_large_info_offset_pair;
 use crate::hermes::function_header::{FunctionHeader, LargeFunctionHeader, SmallFunctionHeader};
 use crate::hermes::Serializable;
 
@@ -125,12 +126,12 @@ where
             }
             // check if they have debug info and exception handlers
             for eh in fh.exception_handlers() {
-                overflowed_function_headers_len += align_offset(overflowed_function_headers_len);
+                overflowed_function_headers_len = align_offset(overflowed_function_headers_len);
                 overflowed_function_headers_len += eh.size() as u64;
             }
 
             if fh.debug_info().is_some() {
-                overflowed_function_headers_len += align_offset(overflowed_function_headers_len);
+                overflowed_function_headers_len = align_offset(overflowed_function_headers_len);
                 overflowed_function_headers_len += fh.debug_info().unwrap().size() as u64;
             }
         }
@@ -242,13 +243,18 @@ where
             let is_overflowed = fh.flags().overflowed || fh.is_overflowed_check();
             if is_overflowed {
                 fh.set_overflowed(true);
+                let (calculated_offset, calculated_info_offset) =
+                    get_large_info_offset_pair(current_offset as u32);
+                fh.set_info_offset(calculated_info_offset as u32);
+                fh.set_offset(calculated_offset as u32);
+            } else {
+                fh.set_info_offset(current_offset as u32);
+                fh.set_offset(bytecode_offset as u32);
             }
-
-            fh.set_info_offset(current_offset as u32);
-            fh.set_offset(bytecode_offset as u32);
 
             if !is_overflowed {
                 w.seek(io::SeekFrom::Start(sfh_offset)).unwrap();
+                if func_pair.func_index == 719 {}
                 fh.serialize(w);
                 w.seek(io::SeekFrom::Start(current_offset)).unwrap();
             } else {
@@ -271,16 +277,38 @@ where
 
                 // Write what _should_ only ever be a LargeFunctionHeader
                 w.seek(io::SeekFrom::Start(current_offset)).unwrap();
-                fh.serialize(w);
+                match fh {
+                    FunctionHeader::Large(lfh) => {
+                        lfh.offset = bytecode_offset as u32;
+                        lfh.info_offset = current_offset as u32;
+                        lfh.flags.overflowed = true;
+                        lfh.serialize(w);
+                    }
+                    _ => {
+                        panic!(
+                            "Function header is not a LargeFunctionHeader. Use the correct type."
+                        );
+                    }
+                }
             }
+
+            w.seek(io::SeekFrom::Start(current_offset)).unwrap();
 
             // Update the SmallFunctionHeader offset and info_offset with the new debug info offset
             // Write the exception handlers and debug info offset
-            for eh in fh.exception_handlers() {
-                eh.serialize(w);
+            if fh.flags().has_exception_handler {
+                align_writer(w, 4);
+
+                // Well this was a stupid fucking bug.
+                encode_u32(w, fh.exception_handlers().len() as u32);
+
+                for eh in fh.exception_handlers() {
+                    eh.serialize(w);
+                }
             }
 
-            if fh.debug_info().is_some() {
+            if fh.flags().has_debug_info && fh.debug_info().is_some() {
+                // align_writer(w, 4);
                 fh.debug_info().unwrap().serialize(w);
             }
 

@@ -2,7 +2,7 @@ use std::{io, vec};
 
 use crate::hermes::debug_info::DebugInfoOffsets;
 use crate::hermes::decode::{decode_u32, decode_u8, read_bitfield};
-use crate::hermes::encode::{align_writer, encode_u32, encode_u8, write_bitfield};
+use crate::hermes::encode::{encode_u32, encode_u8, write_bitfield};
 use crate::hermes::exception_handler::ExceptionHandlerInfo;
 use crate::hermes::Serializable;
 
@@ -67,17 +67,22 @@ impl SmallFunctionHeader {
         self.byte_size = new_size;
     }
 
+    /**
+     * Check if any of the fields in the header are overflowed per their defined bit size.
+     * See: https://github.com/facebook/hermes/blob/main/include/hermes/BCGen/HBC/BytecodeFileFormat.h#L259
+     */
     pub fn is_overflowed_check(&self) -> bool {
-        let is_overflowed = |value: u32| -> bool { value > (1 << 17) - 1 };
-        is_overflowed(self.offset)
-            || is_overflowed(self.param_count)
-            || is_overflowed(self.byte_size)
-            || is_overflowed(self.func_name)
-            || is_overflowed(self.info_offset)
-            || is_overflowed(self.frame_size)
-            || is_overflowed(self.env_size)
-            || is_overflowed(self.highest_read_cache_index)
-            || is_overflowed(self.highest_write_cache_index)
+        let is_overflowed = |value: u32, bits: u32| -> bool { value > (1 << bits) - 1 };
+
+        is_overflowed(self.offset, 25)
+            || is_overflowed(self.param_count, 7)
+            || is_overflowed(self.byte_size, 15)
+            || is_overflowed(self.func_name, 17)
+            || is_overflowed(self.info_offset, 25)
+            || is_overflowed(self.frame_size, 7)
+            || is_overflowed(self.env_size, 8)
+            || is_overflowed(self.highest_read_cache_index, 8)
+            || is_overflowed(self.highest_write_cache_index, 8)
     }
 }
 
@@ -349,6 +354,9 @@ impl LargeFunctionHeader {
     }
 
     pub fn is_overflowed_check(&self) -> bool {
+        // This function can never be overflowed, so we just return false.
+        false
+        /*
         let is_overflowed = |value: u32| -> bool { value > (1 << 17) - 1 };
         is_overflowed(self.offset)
             || is_overflowed(self.param_count)
@@ -359,6 +367,7 @@ impl LargeFunctionHeader {
             || is_overflowed(self.env_size)
             || is_overflowed(self.highest_read_cache_index)
             || is_overflowed(self.highest_write_cache_index)
+        */
     }
 }
 
@@ -369,16 +378,13 @@ impl Default for LargeFunctionHeader {
 }
 impl From<LargeFunctionHeader> for SmallFunctionHeader {
     fn from(lfh: LargeFunctionHeader) -> Self {
-        let (calculated_offset, calculated_info_offset) =
-            get_large_info_offset_pair(lfh.info_offset);
+        // let (calculated_offset, calculated_info_offset) = get_large_info_offset_pair(lfh.info_offset);
         SmallFunctionHeader {
-            // offset: lfh.offset,
-            offset: calculated_offset,
+            offset: lfh.offset,
             param_count: lfh.param_count,
             byte_size: lfh.byte_size,
             func_name: lfh.func_name,
-            // info_offset: lfh.info_offset,
-            info_offset: calculated_info_offset,
+            info_offset: lfh.info_offset,
             frame_size: lfh.frame_size,
             env_size: lfh.env_size,
             highest_read_cache_index: lfh.highest_read_cache_index,
@@ -510,24 +516,20 @@ impl Serializable for LargeFunctionHeader {
             1,
             self.flags.has_exception_handler as u32,
         );
-        write_bitfield(&mut flag_byte, 4, 1, self.flags.has_debug_info as u32);
-        write_bitfield(&mut flag_byte, 5, 1, self.flags.overflowed as u32);
-
-        // func_header_bytes[15] = flags_byte[0];
+        write_bitfield(
+            &mut flag_byte,
+            4,
+            1,
+            if self.flags.has_debug_info { 1 } else { 0 },
+        );
+        write_bitfield(
+            &mut flag_byte,
+            5,
+            1,
+            if self.flags.overflowed { 1 } else { 0 },
+        );
 
         w.write_all(&flag_byte).expect("unable to write first word");
-
-        if self.flags.has_exception_handler {
-            align_writer(w, 4);
-            for handler in &self.exception_handlers {
-                handler.serialize(w);
-            }
-        }
-
-        if self.flags.has_debug_info && self.debug_info.is_some() {
-            align_writer(w, 4);
-            self.debug_info.as_ref().unwrap().serialize(w);
-        }
     }
 }
 

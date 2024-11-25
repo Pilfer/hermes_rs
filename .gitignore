@@ -12,6 +12,8 @@ obsidian-out
 docs
 TODO.md
 *.hexpat
+!helpers/*.hexpat
+*.txt
 
 # mini kitchen sink apps for testing - no need to push this publicly
 wasm

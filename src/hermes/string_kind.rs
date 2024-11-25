@@ -168,7 +168,7 @@ impl Serializable for StringKindEntryOld {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, Copy)]
 pub enum StringKind {
-    String,
-    Identifier,
-    Predefined, // unused < 0.3.0, is now "Identifier"
+    String = 0,
+    Identifier = 1,
+    Predefined = 2, // unused < 0.3.0, is now "Identifier"
 }

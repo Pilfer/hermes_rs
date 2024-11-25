@@ -1089,24 +1089,25 @@ pub trait Serializable {
     fn size(&self) -> usize;
 }
 
-#[macro_export]
 /**
  * This macro is used to define a list of instructions for a given version of Hermes.
  * It will return a `Vec<Instruction>` that can be serialized into the bytecode section
  * of a Hermes executable.
 ```rust
-let instructions = instructions!(
+use hermes_rs::define_instructions;
+let instructions = define_instructions!(
     hermes_rs::v96, // Version is required
-    LoadConstString { r0: 0, p0: 1 },
+    LoadConstString { r0: 0.into(), p0: 1.into() },
     DirectEval {
-        r0: 0,
-        r1: 0,
-        p0: 0
+        r0: 0.into(),
+        r1: 0.into(),
+        p0: 0.into()
     },
-    Ret { r0: 0 },
+    Ret { r0: 0.into() },
 ).unwrap();
 ```
  */
+#[macro_export]
 macro_rules! define_instructions {
   ($version:path, $($instr:ident { $($field:ident: $value:expr),* }),* $(,)?) => {
       {

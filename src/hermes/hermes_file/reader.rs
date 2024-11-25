@@ -171,7 +171,7 @@ where
 
                 FunctionHeader::Small(sfh)
             } else {
-                let new_offset = sfh.info_offset << 16 | sfh.offset;
+                let new_offset = (sfh.info_offset << 16) | (sfh.offset & 0xffff);
                 // Go back to the start of the LFH to deserialize it properly
                 self._reader
                     .seek(io::SeekFrom::Start(new_offset as u64))
@@ -417,7 +417,10 @@ where
             });
         }
 
-        self.function_bytecode.clone()
+        // Remove the clone
+        let vec = &self.function_bytecode;
+        vec.to_vec()
+        // self.function_bytecode.clone()
     }
 
     // ------------------------------------------ //
@@ -472,25 +475,39 @@ where
      */
     pub fn get_string_from_storage_by_index(&self, index: usize) -> String {
         let myfunc = self.string_storage.get(index).unwrap();
-        if myfunc.is_utf_16 {
-            {
-                let bytes = self.string_storage_bytes
-                    [myfunc.offset as usize..(myfunc.offset + (myfunc.length * 2)) as usize]
-                    .to_vec();
-                let utf16_values: Vec<u16> = bytes
-                    .chunks(2)
-                    .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-                    .collect();
 
-                String::from_utf16(&utf16_values).unwrap()
-            }
+        let is_utf16 = myfunc.is_utf_16;
+
+        let mut real_offset = myfunc.offset;
+        let mut real_length = myfunc.length;
+
+        // String is overflowed, so we have to read the real offsets and length from the overflow table
+        if myfunc.length == 255 {
+            let overflow_entry = self
+                .overflow_string_storage
+                .get(myfunc.offset as usize)
+                .unwrap();
+            real_offset = overflow_entry.offset;
+            real_length = overflow_entry.length;
+        }
+
+        if is_utf16 {
+            let bytes = &self.string_storage_bytes
+                [real_offset as usize..(real_offset + (real_length * 2)) as usize];
+
+            let utf16_values: Vec<u16> = bytes
+                .chunks_exact(2)
+                .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+                .collect();
+
+            String::from_utf16(&utf16_values).expect("Invalid UTF-16")
         } else {
             String::from_utf8(
                 self.string_storage_bytes
-                    [myfunc.offset as usize..(myfunc.offset + myfunc.length) as usize]
+                    [real_offset as usize..(real_offset + real_length) as usize]
                     .to_vec(),
             )
-            .unwrap()
+            .expect("Invalid UTF-8")
         }
     }
 
@@ -739,12 +756,21 @@ where
                     func_name = format!("$FUNC_{}", fidx);
                 }
 
+                // Print out the FunctionHeader type - this makes things easier to debug.
+                // There's no real spec, so I can get away with dropping a # comment here.
+                let is_large = match fh {
+                    FunctionHeader::Small(_) => false,
+                    FunctionHeader::Large(_) => true,
+                };
+
                 println!(
-                    "Function<{}>({:?} params, {:?} registers, {:?} symbols):",
+                    "Function<{}>({:?} params, {:?} registers, {:?} symbols): # Type: {}FunctionHeader - funcID: {}",
                     func_name,
                     fh.param_count(),
                     fh.frame_size(),
-                    fh.env_size()
+                    fh.env_size(),
+                    if is_large { "Large" } else { "Small" },
+                    fidx
                 );
 
                 // #[allow(unused_mut)]

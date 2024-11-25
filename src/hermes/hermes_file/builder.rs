@@ -1,10 +1,12 @@
 use std::io;
+use std::vec;
 
 use super::FunctionInstructions;
 use super::HermesFile;
 use crate::hermes::big_int_table::BigIntTableEntry;
 use crate::hermes::debug_info::DebugStringTable;
 use crate::hermes::function_header::{FunctionHeader, LargeFunctionHeader, SmallFunctionHeader};
+use crate::hermes::jenkins::hash_string;
 use crate::hermes::string_kind::{
     StringKind, StringKindEntry, StringKindEntryNew, StringKindEntryOld,
 };
@@ -32,6 +34,143 @@ where
             };
             self.string_kinds.push(sk);
         }
+    }
+
+    pub fn set_string_pairs_unordered(&mut self, mut pairs: Vec<StringTypePair>) {
+        let mut string_storage: Vec<SmallStringTableEntry> = vec![];
+        let mut overflow_string_storage: Vec<OverflowStringTableEntry> = vec![];
+        let mut string_storage_bytes: Vec<u8> = vec![];
+        let mut identifier_hashes: Vec<u32> = vec![];
+
+        let mut string_count = 0;
+        let mut identifier_count = 0;
+        let mut predefined_count = 0;
+
+        let mut last_kind = StringKind::String;
+
+        for (pidx, pair) in pairs.iter_mut().enumerate() {
+            // Set the last_kind to the first kind in the list to build out the sections
+            if pidx == 0 {
+                last_kind = pair.kind;
+            }
+
+            let string = &pair.string;
+            let is_utf_16 = string.chars().any(|c| c as u32 > 0x10000);
+            let offset = string_storage_bytes.len() as u32;
+            let mut length = string.len() as u32;
+
+            if !is_utf_16 {
+                string_storage_bytes.extend(string.as_bytes());
+            } else {
+                let utf16_bytes = string.encode_utf16().collect::<Vec<u16>>();
+                let mut byte_length = 0;
+                for code_unit in &utf16_bytes {
+                    let b = &code_unit.to_le_bytes();
+                    string_storage_bytes.extend_from_slice(b);
+                    byte_length += 1;
+                }
+                length = byte_length as u32;
+            }
+
+            // If the string is >= 255 characters long, it needs to be stored in
+            // the overflow string storage area. The offset gets updated to the index
+            // of this string in the OverflowStringTable, and the length is set to 255
+            // so that the runtime knows to look in the overflow string storage area.
+            if length >= 255 {
+                // set the current string length to 255
+                let small_length = 255;
+                let small_offset = overflow_string_storage.len() as u32;
+
+                string_storage.push(SmallStringTableEntry {
+                    is_utf_16,
+                    offset: small_offset,
+                    length: small_length,
+                });
+
+                overflow_string_storage.push(OverflowStringTableEntry { offset, length });
+            } else {
+                string_storage.push(SmallStringTableEntry {
+                    is_utf_16,
+                    offset,
+                    length,
+                });
+            };
+
+            /*
+             * This logic looks kind of wonky, but I promise it needs to be here.
+             * Some strings get loaded up in chunks based on their kind.
+             * This is more common in larger React Native bundles, which is why it's here.
+             * Example:
+             *  - We have 10 strings of kind String, then 10 strings of kind Identifier.
+             *  - The first 5 Identifiers get defined first, then 10 Strings, followed by
+             *   the last 5 Identifiers.
+             *  I had assumed it was always String -> Identifier -> Predefined, but that's not the case.
+             */
+            match pair.kind {
+                StringKind::String => {
+                    match last_kind {
+                        StringKind::String => {
+                            string_count += 1;
+                            last_kind = StringKind::String;
+                        }
+                        _ => {
+                            if string_count > 0 {
+                                self.push_string_kind(last_kind, string_count);
+                                string_count = 0;
+                                continue;
+                            }
+                            string_count = 1;
+                        }
+                    };
+                }
+                StringKind::Identifier => {
+                    let ihash = hash_string(string.as_str());
+                    if !identifier_hashes.contains(&ihash) {
+                        identifier_hashes.push(ihash);
+                    }
+                    match last_kind {
+                        StringKind::Identifier => {
+                            identifier_count += 1;
+                            last_kind = StringKind::Identifier;
+                        }
+                        _ => {
+                            if identifier_count > 0 {
+                                self.push_string_kind(last_kind, identifier_count);
+                                identifier_count = 0;
+                                continue;
+                            }
+                            identifier_count = 1;
+                        }
+                    };
+                }
+                StringKind::Predefined => {
+                    match last_kind {
+                        StringKind::Predefined => {
+                            predefined_count += 1;
+                            last_kind = StringKind::Predefined;
+                        }
+                        _ => {
+                            if predefined_count > 0 {
+                                self.push_string_kind(last_kind, predefined_count);
+                                predefined_count = 0;
+                                continue;
+                            }
+                            predefined_count = 1;
+                        }
+                    };
+                }
+            }
+        }
+
+        self.string_storage = string_storage;
+        self.overflow_string_storage = overflow_string_storage;
+
+        self.header.string_count = self.string_storage.len() as u32;
+        self.header.overflow_string_count = self.overflow_string_storage.len() as u32;
+
+        // self.identifier_hashes = identifier_hashes;
+
+        self.string_storage_bytes = string_storage_bytes;
     }
 
     // TODO: need to append identifiers
