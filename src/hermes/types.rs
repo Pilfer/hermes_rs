@@ -1,7 +1,7 @@
 use std::ops::Add;
 
 #[derive(Debug, Copy, Clone)]
-pub struct Reg8(u8);
+pub struct Reg8(pub u8);
 impl Default for Reg8 {
     fn default() -> Self {
         Reg8(0)
@@ -24,7 +24,7 @@ impl Into<u32> for Reg8 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct Reg32(u32);
+pub struct Reg32(pub u32);
 impl Default for Reg32 {
     fn default() -> Self {
         Reg32(0)
@@ -42,7 +42,7 @@ impl From<Reg32> for u32 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct UInt8(u8);
+pub struct UInt8(pub u8);
 impl Default for UInt8 {
     fn default() -> Self {
         UInt8(0)
@@ -65,7 +65,7 @@ impl Into<u32> for UInt8 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct UInt16(u16);
+pub struct UInt16(pub u16);
 impl Default for UInt16 {
     fn default() -> Self {
         UInt16(0)
@@ -88,7 +88,7 @@ impl Into<u32> for UInt16 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct UInt32(u32);
+pub struct UInt32(pub u32);
 impl Default for UInt32 {
     fn default() -> Self {
         UInt32(0)
@@ -106,7 +106,7 @@ impl From<UInt32> for u32 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct Addr8(i8);
+pub struct Addr8(pub i8);
 impl Default for Addr8 {
     fn default() -> Self {
         Addr8(0)
@@ -129,7 +129,7 @@ impl Into<u32> for Addr8 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct Addr32(i32);
+pub struct Addr32(pub i32);
 impl Default for Addr32 {
     fn default() -> Self {
         Addr32(0)
@@ -152,7 +152,7 @@ impl Into<u32> for Addr32 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct Imm32(i32);
+pub struct Imm32(pub i32);
 impl Default for Imm32 {
     fn default() -> Self {
         Imm32(0)
@@ -175,7 +175,7 @@ impl Into<u32> for Imm32 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct Double(f64);
+pub struct Double(pub f64);
 impl Default for Double {
     fn default() -> Self {
         Double(0.0)
@@ -198,7 +198,7 @@ impl Into<u32> for Double {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct StringIDUInt8(u8);
+pub struct StringIDUInt8(pub u8);
 impl Default for StringIDUInt8 {
     fn default() -> Self {
         StringIDUInt8(0)
@@ -221,7 +221,7 @@ impl Into<u32> for StringIDUInt8 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct StringIDUInt16(u16);
+pub struct StringIDUInt16(pub u16);
 impl Default for StringIDUInt16 {
     fn default() -> Self {
         StringIDUInt16(0)
@@ -244,7 +244,7 @@ impl Into<u32> for StringIDUInt16 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct StringIDUInt32(u32);
+pub struct StringIDUInt32(pub u32);
 impl Default for StringIDUInt32 {
     fn default() -> Self {
         StringIDUInt32(0)
@@ -262,7 +262,7 @@ impl From<StringIDUInt32> for u32 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct FunctionIDUInt8(u8);
+pub struct FunctionIDUInt8(pub u8);
 impl Default for FunctionIDUInt8 {
     fn default() -> Self {
         FunctionIDUInt8(0)
@@ -285,7 +285,7 @@ impl Into<u32> for FunctionIDUInt8 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct FunctionIDUInt16(u16);
+pub struct FunctionIDUInt16(pub u16);
 impl Default for FunctionIDUInt16 {
     fn default() -> Self {
         FunctionIDUInt16(0)
@@ -308,7 +308,7 @@ impl Into<u32> for FunctionIDUInt16 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct FunctionIDUInt32(u32);
+pub struct FunctionIDUInt32(pub u32);
 impl Default for FunctionIDUInt32 {
     fn default() -> Self {
         FunctionIDUInt32(0)
@@ -326,7 +326,7 @@ impl From<FunctionIDUInt32> for u32 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct BigIntIDUInt16(u16);
+pub struct BigIntIDUInt16(pub u16);
 impl Default for BigIntIDUInt16 {
     fn default() -> Self {
         BigIntIDUInt16(0)
@@ -349,7 +349,7 @@ impl Into<u32> for BigIntIDUInt16 {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct BigIntIDUInt32(u32);
+pub struct BigIntIDUInt32(pub u32);
 impl Default for BigIntIDUInt32 {
     fn default() -> Self {
         BigIntIDUInt32(0)
