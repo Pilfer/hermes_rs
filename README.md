@@ -1,11 +1,8 @@
 # hermes_rs
 
-Note: Still a WIP - A PR is always welcome.  
-
-The API is subject to change as I iterate over use cases and improve the design. 
-
-
 A *nearly* dependency-free disassembler and assembler for the Hermes bytecode, written in Rust.  
+
+Note: Still a WIP - A PR is always welcome. The API is subject to change as I iterate over use cases and improve the design.  
 
 For the sake transparency, the current dependencies are:  
 
@@ -53,7 +50,7 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
 | 95          | ✅           | ✅                 | ❌                  | ❌         |
 | 96          | ✅           | ✅                 | ❌                  | ❌         |
 
-A couple of features are missing currently, as they're low priority for me at the moment.
+A couple of features are missing currently, as they're low priority for me at the moment.  
 
 - Regular Expression deserialization and serialization*  
 - Debug Info  deserialization and serialization*  
