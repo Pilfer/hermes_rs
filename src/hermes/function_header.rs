@@ -125,16 +125,13 @@ impl Serializable for SmallFunctionHeader {
         let has_exception_handler = read_bitfield(&func_header_bytes, 123, 1);
         let has_debug_info = read_bitfield(&func_header_bytes, 124, 1);
         let overflowed = read_bitfield(&func_header_bytes, 125, 1);
+        let _unused = read_bitfield(&func_header_bytes, 126, 2);
 
         let flags = FunctionHeaderFlag {
             prohibit_invoke: match prohibit_invoke as u8 {
                 0 => FunctionHeaderFlagProhibitions::ProhibitCall,
                 1 => FunctionHeaderFlagProhibitions::ProhibitConstruct,
                 2 => FunctionHeaderFlagProhibitions::ProhibitNone,
-                // Sometimes when a function is overflowed, we might get an incorrect value here
-                // This obviously breaks the match statement, so we just default to ProhibitNone.
-                // The true value will be overwritten in the LargeFunctionHeader.deserialize() call
-                _ if overflowed == 1 => FunctionHeaderFlagProhibitions::ProhibitNone,
                 _ => {
                     panic!(
                         "Unknown prohibit invoke on small function header: {:?} at position {:?}",
@@ -201,37 +198,10 @@ impl Serializable for SmallFunctionHeader {
                 self.param_count
             },
         );
-        write_bitfield(
-            &mut func_header_bytes,
-            32,
-            15,
-            if self.flags.overflowed {
-                0
-            } else {
-                self.byte_size
-            },
-        );
-        write_bitfield(
-            &mut func_header_bytes,
-            47,
-            17,
-            if self.flags.overflowed {
-                0
-            } else {
-                self.func_name
-            },
-        );
+        write_bitfield(&mut func_header_bytes, 32, 15, self.byte_size);
+        write_bitfield(&mut func_header_bytes, 47, 17, self.func_name);
         write_bitfield(&mut func_header_bytes, 64, 25, self.info_offset);
-        write_bitfield(
-            &mut func_header_bytes,
-            89,
-            7,
-            if self.flags.overflowed {
-                0
-            } else {
-                self.frame_size
-            },
-        );
+        write_bitfield(&mut func_header_bytes, 89, 7, self.frame_size);
         write_bitfield(
             &mut func_header_bytes,
             96,
@@ -354,8 +324,8 @@ impl LargeFunctionHeader {
     }
 
     pub fn is_overflowed_check(&self) -> bool {
-        // This function can never be overflowed, so we just return false.
-        false
+        // Technically LargeFunctionHeaders aren't "overflowed", but I'm relying on this bool elsewhere
+        true
         /*
         let is_overflowed = |value: u32| -> bool { value > (1 << 17) - 1 };
         is_overflowed(self.offset)
@@ -526,7 +496,7 @@ impl Serializable for LargeFunctionHeader {
             &mut flag_byte,
             5,
             1,
-            if self.flags.overflowed { 1 } else { 0 },
+            if self.flags.overflowed == true { 1 } else { 0 },
         );
 
         w.write_all(&flag_byte).expect("unable to write first word");

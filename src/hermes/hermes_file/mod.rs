@@ -47,6 +47,7 @@ pub struct FunctionBytecode {
 #[derive(Debug, Clone)]
 pub struct FunctionInstructions {
     pub func_index: u32,
+    pub is_large: bool,
     pub bytecode: Vec<HermesInstruction>,
 }
 

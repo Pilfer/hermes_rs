@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io;
+use std::io::{self};
 
 use crate::hermes::big_int_table::BigIntTableEntry;
 use crate::hermes::debug_info::DebugInfoOffsets;
@@ -9,8 +9,9 @@ use crate::hermes::header::HermesHeader;
 use crate::hermes::cjs_module::{CJSModule, CJSModuleEntry, CJSModuleInt};
 use crate::hermes::debug_info::{DebugInfo, DebugInfoHeader};
 use crate::hermes::decode::{align_reader, decode_u32};
-use crate::hermes::function_header::FunctionHeader;
-use crate::hermes::function_header::{LargeFunctionHeader, SmallFunctionHeader};
+use crate::hermes::function_header::{
+    FunctionHeader, FunctionHeaderFlagProhibitions, LargeFunctionHeader, SmallFunctionHeader,
+};
 use crate::hermes::function_sources::FunctionSourceEntry;
 use crate::hermes::regexp_table::RegExpTableEntry;
 use crate::hermes::string_kind::StringKindEntry;
@@ -121,8 +122,8 @@ where
         for _ in 0..self.header.function_count {
             let _initpos = self._reader.stream_position().unwrap();
             let mut sfh = SmallFunctionHeader::deserialize(&mut self._reader, self.header.version);
-            let anchor_pos = _initpos + sfh.size() as u64;
 
+            let anchor_pos = _initpos + sfh.size() as u64;
             // Check if we're dealing with a Small or Large Function Header.
             // Overflowed = Large Function Header
             let function_header_val: FunctionHeader = if !sfh.flags.overflowed {
@@ -408,11 +409,20 @@ where
     }
 
     pub fn get_instructions(&mut self) -> Vec<FunctionInstructions> {
-        let offsets: Vec<_> = self.function_headers.iter().map(|fh| fh.offset()).collect();
-        for (idx, _offset) in offsets.iter().enumerate() {
+        let function_headers: Vec<_> = self
+            .function_headers
+            .iter()
+            .enumerate()
+            .map(|(idx, fh)| (idx, fh.clone()))
+            .collect();
+        for (idx, fh) in function_headers {
             let bytecode = self.get_func_bytecode(idx as u32);
             self.function_bytecode.push(FunctionInstructions {
                 func_index: idx as u32,
+                is_large: match fh {
+                    FunctionHeader::Small(_) => false,
+                    FunctionHeader::Large(_) => true,
+                },
                 bytecode,
             });
         }
@@ -764,13 +774,20 @@ where
                 };
 
                 println!(
-                    "Function<{}>({:?} params, {:?} registers, {:?} symbols): # Type: {}FunctionHeader - funcID: {}",
+                    "{}<{}>({:?} params, {:?} registers, {:?} symbols): # Type: {}FunctionHeader - funcID: {} ({} bytes @ {})\n",
+                    match fh.flags().prohibit_invoke {
+                        FunctionHeaderFlagProhibitions::ProhibitCall => "Constructor",
+                        FunctionHeaderFlagProhibitions::ProhibitConstruct => "NCFunction",
+                        FunctionHeaderFlagProhibitions::ProhibitNone => "Function",
+                    },
                     func_name,
                     fh.param_count(),
                     fh.frame_size(),
                     fh.env_size(),
                     if is_large { "Large" } else { "Small" },
-                    fidx
+                    fidx,
+                    fh.byte_size(),
+                    self._reader.stream_position().unwrap(),
                 );
 
                 // #[allow(unused_mut)]
@@ -781,7 +798,6 @@ where
                 let mut byte_index = 0;
 
                 let mut labels: HashMap<u32, u32> = HashMap::new();
-
                 // Iterate over bytecode_buf and parse the instructions
                 while let Some(&op_byte) = byte_iter.next() {
                     let op = op_byte;

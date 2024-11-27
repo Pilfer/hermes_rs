@@ -22,6 +22,9 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
 
 - [hermes\_rs](#hermes_rs)
     - [Supported HBC Versions](#supported-hbc-versions)
+      - [Known Issues \& Weirdness](#known-issues--weirdness)
+        - [Slow(er) Performance on Large Files](#slower-performance-on-large-files)
+        - [HBC File Size Differences](#hbc-file-size-differences)
       - [Project Goals](#project-goals)
         - [Potential Use cases](#potential-use-cases)
       - [Features](#features)
@@ -57,13 +60,33 @@ A couple of features are missing currently, as they're low priority for me at th
 
 \* _Supports u8 buffer for manual population_  
 
+--- 
+
+#### Known Issues & Weirdness  
+
+##### Slow(er) Performance on Large Files    
+
+Chances are you need to compile the program that uses this crate with the `--release` flag and run the binary directly.  
+
+
+##### HBC File Size Differences  
+
+The size of a binary produced with `hermes_rs` is going to be a bit larger than one compiled directly with hermes. This is *primarily* due to the fact that hermes does some string merging to keep bundles down.  
+
+Example: If `car` and `racecar` are both strings within the app, only `racecar` will be written. Two StringTableEntry objects are created: `Entry { offset: 0, length: 7 }` and `Entry { offset: 4, length: 3 }`.
+
+As of right now, `hermes_rs` does not implement this functionality. It's pretty literal when it comes to strings, and doesn't try to be clever or save space.
+
+
+---  
+
 
 #### Project Goals
 
 - Full coverage for all public HBC versions  
 - The ability to inject code stubs directly into the .hbc file for instrumentation  
 - Textual HBC assembly  
-- Eventually a halfway decent decompiler, but that may be another project that uses this one  
+- Eventually a halfway decent decompiler, but that may be another project that uses this one as a base  
 
 ##### Potential Use cases
 

@@ -379,6 +379,10 @@ where
 
         self.function_bytecode.push(FunctionInstructions {
             func_index: self.function_headers.len() as u32 - 1,
+            is_large: match func {
+                FunctionHeader::Small(_) => false,
+                FunctionHeader::Large(_) => true,
+            },
             bytecode: parent_bytecode,
         });
     }

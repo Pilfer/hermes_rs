@@ -114,33 +114,14 @@ where
         c += bytecode_length;
 
         c = align_offset(c);
-        // this is where LFH and/or debug info will go
-        let debug_info_offset = c;
 
-        // iterate over all function headers, check if overflowed, and calculate the size of the large function headers
-        let mut overflowed_function_headers_len = 0;
-        for fh in &self.function_headers {
-            if fh.flags().overflowed {
-                // should always increment by 32
-                overflowed_function_headers_len += fh.size() as u64;
-            }
-            // check if they have debug info and exception handlers
-            for eh in fh.exception_handlers() {
-                overflowed_function_headers_len = align_offset(overflowed_function_headers_len);
-                overflowed_function_headers_len += eh.size() as u64;
-            }
-
-            if fh.debug_info().is_some() {
-                overflowed_function_headers_len = align_offset(overflowed_function_headers_len);
-                overflowed_function_headers_len += fh.debug_info().unwrap().size() as u64;
-            }
-        }
+        // Mostly using this as a debugging value. Compiler will remove it.
+        let _function_header_offset = c;
 
         // Now that we have all the offset locations, we can get to writing the actual data at those locations.
         // This whole process will be rewritten once all the bugs are hammered out.
         w.seek(io::SeekFrom::Start(string_kind_offset)).unwrap();
         self.write_string_kinds(w);
-        // TODO: add assertions here to ensure we're at the correct positon
 
         w.seek(io::SeekFrom::Start(identifier_hash_offset)).unwrap();
         self.write_identifier_hashes(w);
@@ -182,17 +163,36 @@ where
             self.write_cjs_module_table(w);
         }
 
-        w.seek(io::SeekFrom::Start(function_source_table_offset))
-            .unwrap();
-        self.write_function_source_table(w);
+        if self.header.function_source_count > 0 {
+            w.seek(io::SeekFrom::Start(function_source_table_offset))
+                .unwrap();
+            self.write_function_source_table(w);
+        }
 
         w.seek(io::SeekFrom::Start(bytecode_offset)).unwrap();
+
+        // Debug...
+        // println!("string_kind_offset: {:?}", string_kind_offset);
+        // println!("identifier_hash_offset: {:?}", identifier_hash_offset);
+        // println!("string_table_offset: {:?}", string_table_offset);
+        // println!("overflow_string_table_offset: {:?}", overflow_string_table_offset);
+        // println!("string_storage_offset: {:?}", string_storage_offset);
+        // println!("array_buffer_offset: {:?}", array_buffer_offset);
+        // println!("object_key_buffer_offset: {:?}", object_key_buffer_offset);
+        // println!("object_val_buffer_offset: {:?}", object_val_buffer_offset);
+        // println!("big_int_table_offset: {:?}", big_int_table_offset);
+        // println!("reg_exp_table_offset: {:?}", reg_exp_table_offset);
+        // println!("cjs_module_table_offset: {:?}", cjs_module_table_offset);
+        // println!("function_source_table_offset: {:?}", function_source_table_offset);
+        // println!("bytecode_offset: {:?}", bytecode_offset);
 
         align_writer(w, 4);
 
         // Function index : offset of the bytecode insns
         let mut function_bytecode_offsets = vec![];
 
+        // Write the bytecode for each function here, and keep a record of the offset
+        // so we can write it to the function header later
         for func_pair in &mut self.function_bytecode {
             let current_offset = w.stream_position().unwrap();
             function_bytecode_offsets.push((func_pair.func_index, current_offset));
@@ -213,12 +213,35 @@ where
             sfhoc += 16;
         }
 
-        let mut function_debug_info_offsets: Vec<(u32, bool, u64)> = vec![];
+        // This is the offset where LargeFunctionHeaders will be written.
+        let large_function_header_offset = w.stream_position().unwrap() as u64;
 
-        w.seek(io::SeekFrom::Start(debug_info_offset)).unwrap();
-        for func_pair in &mut self.function_bytecode {
-            let current_offset = w.stream_position().unwrap();
+        // Manually override any LargeFunctionHeaders that exist to be SmallFunctionHeaders
+        for fh in &mut self.function_headers {
+            let _current_offset = w.stream_position().unwrap();
 
+            // fh.set_offset(bytecode_offset as u32); // bytecode
+            // fh.set_info_offset(current_offset as u32); // exception handlers, debug info
+            match fh {
+                FunctionHeader::Large(lfh) => {
+                    // If we catch a Large, we need to convert it to a small.
+                    // The data, at this point in the code, is still valid as it hasn't been modified yet.
+                    let mut sfh: SmallFunctionHeader = SmallFunctionHeader::from(lfh.clone());
+                    sfh.flags.overflowed = true;
+
+                    // We're reassigning the Large to a Small here.
+                    // Below this section in the code, we're going to check for overflows
+                    // and actually write the LargeFunctionHeader based on the data within this.
+                    fh.set_overflowed(true);
+                    *fh = FunctionHeader::Small(sfh);
+                }
+                _ => { /* Do nothing */ }
+            }
+        }
+
+        let mut large_write_offset = large_function_header_offset;
+        for (_fidx, func_pair) in &mut self.function_bytecode.iter().enumerate() {
+            let current_pos = w.stream_position().unwrap();
             // Check if the function header is overflowed
             let fh = self
                 .function_headers
@@ -239,81 +262,119 @@ where
                 .unwrap()
                 .1;
 
-            // Do the overflow check _after_ we have the offsets.
-            let is_overflowed = fh.flags().overflowed || fh.is_overflowed_check();
-            if is_overflowed {
-                fh.set_overflowed(true);
-                let (calculated_offset, calculated_info_offset) =
-                    get_large_info_offset_pair(current_offset as u32);
-                fh.set_info_offset(calculated_info_offset as u32);
-                fh.set_offset(calculated_offset as u32);
-            } else {
-                fh.set_info_offset(current_offset as u32);
-                fh.set_offset(bytecode_offset as u32);
-            }
+            match fh {
+                FunctionHeader::Small(sfh) => {
+                    let is_overflowed = sfh.flags.overflowed || sfh.is_overflowed_check();
+                    if is_overflowed {
+                        let mut lfh = LargeFunctionHeader::from(sfh.clone());
 
-            if !is_overflowed {
-                w.seek(io::SeekFrom::Start(sfh_offset)).unwrap();
-                if func_pair.func_index == 719 {}
-                fh.serialize(w);
-                w.seek(io::SeekFrom::Start(current_offset)).unwrap();
-            } else {
-                // FH is definitely overflowed, so handle appropriately
-                match fh {
-                    FunctionHeader::Small(sfh) => {
-                        // Convert to LargeFunctionHeader
-                        let lfh: LargeFunctionHeader = LargeFunctionHeader::from(sfh.clone());
-                        w.seek(io::SeekFrom::Start(sfh_offset)).unwrap();
-                        sfh.serialize(w);
+                        // Seek to large_write_offset and serialize the LargeFunctionHeader + exception handlers + debug info
+                        w.seek(io::SeekFrom::Start(large_write_offset)).unwrap();
 
-                        *fh = FunctionHeader::Large(lfh);
-                    }
-                    FunctionHeader::Large(lfh) => {
-                        let sfh: SmallFunctionHeader = SmallFunctionHeader::from(lfh.clone());
-                        w.seek(io::SeekFrom::Start(sfh_offset)).unwrap();
-                        sfh.serialize(w);
-                    }
-                }
-
-                // Write what _should_ only ever be a LargeFunctionHeader
-                w.seek(io::SeekFrom::Start(current_offset)).unwrap();
-                match fh {
-                    FunctionHeader::Large(lfh) => {
+                        // Update the offsets of this LargeFunctionHeader to reflect the correct values.
+                        // Possibly superfluous, but it's here for now.
                         lfh.offset = bytecode_offset as u32;
-                        lfh.info_offset = current_offset as u32;
-                        lfh.flags.overflowed = true;
+                        lfh.info_offset = large_write_offset as u32;
+
+                        // Keep track of where this is being written to so we can calculate the overflow offsets
+                        // for the SmallFunctionHeader
+                        let large_offset = w.stream_position().unwrap();
+
+                        // Serialize the LargeFunctionHeader struct
                         lfh.serialize(w);
-                    }
-                    _ => {
-                        panic!(
-                            "Function header is not a LargeFunctionHeader. Use the correct type."
-                        );
+
+                        // Serialize the exception handlers and debug info
+                        if lfh.flags.has_exception_handler {
+                            align_writer(w, 4);
+                            encode_u32(w, lfh.exception_handlers.len() as u32);
+                            for eh in lfh.exception_handlers.iter() {
+                                eh.serialize(w);
+                            }
+                        }
+
+                        if lfh.flags.has_debug_info && lfh.debug_info.is_some() {
+                            lfh.debug_info.as_mut().unwrap().serialize(w);
+                        }
+
+                        // Update the offset for large writes so we don't let them step on one another
+                        large_write_offset = w.stream_position().unwrap() as u64;
+
+                        // Seek back to current_offset to write the small header
+                        w.seek(io::SeekFrom::Start(current_pos)).unwrap();
+
+                        // Update SFH offset + info_offset
+                        let (new_large_offset, new_large_info_offset) =
+                            get_large_info_offset_pair(large_offset as u32);
+                        sfh.offset = new_large_offset as u32;
+                        sfh.info_offset = new_large_info_offset as u32;
+                        sfh.flags.overflowed = true;
+                        sfh.serialize(w);
+                    } else {
+                        w.seek(io::SeekFrom::Start(sfh_offset)).unwrap(); // string kind off fbbe0
+                                                                          // Write the SmallFunctionHeader as per usual
+                        sfh.offset = bytecode_offset as u32;
+                        sfh.info_offset = large_write_offset as u32;
+                        sfh.serialize(w);
+
+                        let current_offset = w.stream_position().unwrap();
+                        w.seek(io::SeekFrom::Start(sfh.info_offset as u64)).unwrap();
+                        if !sfh.flags.overflowed {
+                            // Write the exception handlers and debug info for true SmallFunctionHeaders.
+                            // At this point we've already written the LargeFunctionHeader exceptions and debug info
+                            if sfh.flags.has_exception_handler {
+                                // println!("writing exception/debug info for {:?} at {:?}", _fidx, w.stream_position().unwrap());
+                                align_writer(w, 4);
+                                encode_u32(w, sfh.exception_handlers.len() as u32);
+                                for eh in sfh.exception_handlers.iter() {
+                                    eh.serialize(w);
+                                    large_write_offset = w.stream_position().unwrap() as u64;
+                                }
+                            }
+
+                            if sfh.flags.has_debug_info && sfh.debug_info.is_some() {
+                                sfh.debug_info.as_mut().unwrap().serialize(w);
+                                large_write_offset = w.stream_position().unwrap() as u64;
+                            }
+                        }
+                        // Go back to the position of the SmallFunctionHeader after the write
+                        w.seek(io::SeekFrom::Start(current_offset)).unwrap();
                     }
                 }
-            }
-
-            w.seek(io::SeekFrom::Start(current_offset)).unwrap();
-
-            // Update the SmallFunctionHeader offset and info_offset with the new debug info offset
-            // Write the exception handlers and debug info offset
-            if fh.flags().has_exception_handler {
-                align_writer(w, 4);
-
-                // Well this was a stupid fucking bug.
-                encode_u32(w, fh.exception_handlers().len() as u32);
-
-                for eh in fh.exception_handlers() {
-                    eh.serialize(w);
+                _ => {
+                    panic!("Function header is not a SmallFunctionHeader. Use the correct type.");
                 }
             }
-
-            if fh.flags().has_debug_info && fh.debug_info().is_some() {
-                // align_writer(w, 4);
-                fh.debug_info().unwrap().serialize(w);
-            }
-
-            function_debug_info_offsets.push((func_pair.func_index, is_overflowed, current_offset));
         }
+
+        // Seek to the large_write_offset, as thats the last place we wrote a LargeFunctionHeader or SmallFunctionHeader Exception info/debug info
+        w.seek(io::SeekFrom::Start(large_write_offset)).unwrap();
+        println!("1111111 large_write_offset: {:?}", large_write_offset);
+
+        // Write large function headers in a nicer way
+        // for (offset, mut lfh) in large_headers {
+        //     w.seek(io::SeekFrom::Start(offset)).unwrap();
+        //     let current_offset = w.stream_position().unwrap();
+        //     println!("Writing large function header at {:?}", offset);
+        //     lfh.info_offset = current_offset as u32;
+        //     println!("LFH: {:?}", lfh);
+        //     lfh.serialize(w);
+
+        //     if lfh.flags.has_exception_handler {
+        //         align_writer(w, 4);
+
+        //         // Well this was a stupid fucking bug.
+        //         encode_u32(w, lfh.exception_handlers.len() as u32);
+
+        //         for eh in lfh.exception_handlers {
+        //             eh.serialize(w);
+        //         }
+        //     }
+
+        //     if lfh.flags.has_debug_info && lfh.debug_info.is_some() {
+        //         // align_writer(w, 4);
+        //         lfh.debug_info.unwrap().serialize(w);
+        //     }
+        // }
 
         self.offsets.debug_info_offset = w.stream_position().unwrap() as u32;
         self.write_debug_info(w);
@@ -340,6 +401,7 @@ where
     }
 
     // Don't use this.
+    /*
     pub fn write_function_headers<W>(&mut self, w: &mut W)
     where
         W: Write + io::Seek,
@@ -385,10 +447,10 @@ where
                     }
                 }
             }
-
-            // TODO: Tag bytecode to a function
         }
     }
+
+    */
 
     pub fn write_string_kinds<W>(&self, w: &mut W)
     where
@@ -537,7 +599,6 @@ where
     where
         W: Write + io::Seek,
     {
-        // TODO: set the header debug info offset to w.stram_position().unwrap() here
         let offset = w.stream_position().unwrap();
         self.offsets.debug_info_offset = offset as u32;
         self.debug_info.serialize(w);
