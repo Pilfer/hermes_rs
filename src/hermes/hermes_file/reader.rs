@@ -463,6 +463,7 @@ where
                             string: self.get_string_from_storage_by_index(string_id),
                             kind: sk.kind,
                         });
+                        // println!("{:?}-{:?}", sk.kind, self.get_string_from_storage_by_index(string_id));
                         string_id += 1;
                     }
                 }
@@ -510,7 +511,11 @@ where
                 .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
                 .collect();
 
-            String::from_utf16(&utf16_values).expect("Invalid UTF-16")
+            // Commenting out due to: https://github.com/Pilfer/hermes_rs/issues/9
+            // String::from_utf16(&utf16_values).expect("Invalid UTF-16")
+            // in favor of from_utf16_lossy, which allows for "invalid" UTF-16.
+            // TODO: Actually fix this.
+            String::from_utf16_lossy(&utf16_values).to_string()
         } else {
             String::from_utf8(
                 self.string_storage_bytes

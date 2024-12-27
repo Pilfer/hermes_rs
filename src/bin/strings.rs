@@ -22,9 +22,10 @@ fn main() {
     let mut reader = io::BufReader::new(f);
 
     let hermes_file = HermesFile::deserialize(&mut reader);
+    // let hex_string_bytes = hermes_file.string_storage_bytes.iter().map(|b| format!("{:02X}", b)).collect::<Vec<String>>().join(" ");
+    // println!("String storage bytes: {}", hex_string_bytes);
 
     for (_sidx, s) in hermes_file.get_strings_by_kind().iter().enumerate() {
-        // println!("[#{}] {}", _sidx, s); // Print index and string if you'd like.
-        println!("{:?}-{}", s.kind, s.string);
+        println!("{:?}-{}", s.kind, s.string); // println!("[#{}] {}", _sidx, s); // Print index and string if you'd like.
     }
 }

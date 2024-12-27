@@ -28,6 +28,22 @@ pub enum StringKindEntry {
     New(StringKindEntryNew),
 }
 
+impl StringKindEntry {
+    pub fn get_offset(&self) -> u32 {
+        match self {
+            StringKindEntry::Old(entry) => entry.count,
+            StringKindEntry::New(entry) => entry.count,
+        }
+    }
+
+    pub fn get_length(&self) -> u32 {
+        match self {
+            StringKindEntry::Old(entry) => entry.count,
+            StringKindEntry::New(entry) => entry.count,
+        }
+    }
+}
+
 impl Serializable for StringKindEntry {
     type Version = u32;
     /// The size of a StringKindEntry is 4 bytes, bitfields are used to store the data.
@@ -166,7 +182,7 @@ impl Serializable for StringKindEntryOld {
 
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum StringKind {
     String = 0,
     Identifier = 1,
