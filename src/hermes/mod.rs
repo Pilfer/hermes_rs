@@ -845,6 +845,10 @@ macro_rules! build_instructions {
 }
 
 // End macro definitions
+#[cfg(feature = "v76")]
+#[macro_use]
+pub mod v76;
+
 #[cfg(feature = "v84")]
 #[macro_use]
 pub mod v84;
@@ -877,6 +881,8 @@ pub mod v96;
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Copy, Clone)]
 pub enum HermesInstruction {
+    #[cfg(feature = "v76")]
+    V76(v76::Instruction),
     #[cfg(feature = "v84")]
     V84(v84::Instruction),
     #[cfg(feature = "v89")]
@@ -899,6 +905,8 @@ impl HermesInstruction {
         R: io::Read + io::BufRead + io::Seek,
     {
         match self {
+            #[cfg(feature = "v76")]
+            HermesInstruction::V76(instruction) => instruction.display(_hermes),
             #[cfg(feature = "v84")]
             HermesInstruction::V84(instruction) => instruction.display(_hermes),
             #[cfg(feature = "v89")]
@@ -918,6 +926,8 @@ impl HermesInstruction {
 
     pub fn is_jmp(&self) -> bool {
         match self {
+            #[cfg(feature = "v76")]
+            HermesInstruction::V76(instruction) => instruction.is_jmp(),
             #[cfg(feature = "v84")]
             HermesInstruction::V84(instruction) => instruction.is_jmp(),
             #[cfg(feature = "v89")]
@@ -937,6 +947,8 @@ impl HermesInstruction {
 
     pub fn get_address_field(&self) -> u32 {
         match self {
+            #[cfg(feature = "v76")]
+            HermesInstruction::V76(instruction) => instruction.get_address_field(),
             #[cfg(feature = "v84")]
             HermesInstruction::V84(instruction) => instruction.get_address_field(),
             #[cfg(feature = "v89")]
@@ -956,6 +968,8 @@ impl HermesInstruction {
 
     pub fn size(&self) -> usize {
         match self {
+            #[cfg(feature = "v76")]
+            HermesInstruction::V76(instruction) => instruction.size(),
             #[cfg(feature = "v84")]
             HermesInstruction::V84(instruction) => instruction.size(),
             #[cfg(feature = "v89")]
@@ -978,6 +992,8 @@ impl HermesInstruction {
         W: std::io::Write,
     {
         match self {
+            #[cfg(feature = "v76")]
+            HermesInstruction::V76(instruction) => instruction.serialize(w),
             #[cfg(feature = "v84")]
             HermesInstruction::V84(instruction) => instruction.serialize(w),
             #[cfg(feature = "v89")]
@@ -1000,6 +1016,8 @@ impl HermesInstruction {
         R: io::Read + io::BufRead + io::Seek,
     {
         match op {
+            #[cfg(feature = "v76")]
+            76 => HermesInstruction::V76(v76::Instruction::deserialize(r, op)),
             #[cfg(feature = "v84")]
             89 => HermesInstruction::V84(v84::Instruction::deserialize(r, op)),
             #[cfg(feature = "v89")]
@@ -1021,6 +1039,13 @@ impl HermesInstruction {
 
 pub trait IntoParentInstruction {
     fn into_parent(self) -> HermesInstruction;
+}
+
+#[cfg(feature = "v76")]
+impl IntoParentInstruction for v76::Instruction {
+    fn into_parent(self) -> HermesInstruction {
+        HermesInstruction::V76(self)
+    }
 }
 
 #[cfg(feature = "v84")]

@@ -811,6 +811,10 @@ where
 
                     // Deserialize the instruction
                     let ins_obj: Option<HermesInstruction> = match self.header.version {
+                        #[cfg(feature = "v76")]
+                        76 => Some(HermesInstruction::V76(
+                            crate::hermes::v76::Instruction::deserialize(&mut r_cursor, op),
+                        )),
                         #[cfg(feature = "v84")]
                         84 => Some(HermesInstruction::V84(
                             crate::hermes::v84::Instruction::deserialize(&mut r_cursor, op),

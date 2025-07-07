@@ -4,13 +4,14 @@ description = "A dependency-free disassembler and assembler for the Hermes bytec
 repository = "https://github.com/Pilfer/hermes_rs"
 homepage = "https://github.com/Pilfer/hermes_rs"
 license = "MIT"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 # default = ["v84", "v89","v90","v93","v94","v95", "v96"]
-default = ["v84", "v94", "v95", "v96", "v96"]
+default = ["v76", "v84", "v89", "v90", "v93", "v94", "v95", "v96", "v96"]
+v76 = []
 v84 = []
 v89 = []
 v90 = []
