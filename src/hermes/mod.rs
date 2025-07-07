@@ -1019,7 +1019,7 @@ impl HermesInstruction {
             #[cfg(feature = "v76")]
             76 => HermesInstruction::V76(v76::Instruction::deserialize(r, op)),
             #[cfg(feature = "v84")]
-            89 => HermesInstruction::V84(v84::Instruction::deserialize(r, op)),
+            84 => HermesInstruction::V84(v84::Instruction::deserialize(r, op)),
             #[cfg(feature = "v89")]
             89 => HermesInstruction::V89(v89::Instruction::deserialize(r, op)),
             #[cfg(feature = "v90")]
