@@ -43,6 +43,7 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
 
 | HBC Version | Disassembler | (Binary) Assembler | (Textual) Assembler | Decompiler |
 | ----------- | ------------ | ------------------ | ------------------- | ---------- |
+| 76          | ✅           | ✅                 | ❌                  | ❌         |
 | 89          | ✅           | ✅                 | ❌                  | ❌         |
 | 90          | ✅           | ✅                 | ❌                  | ❌         |
 | 93          | ✅           | ✅                 | ❌                  | ❌         |
