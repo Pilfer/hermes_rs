@@ -27,6 +27,13 @@ A special thanks to [P1sec](https://github.com/P1sec/hermes-dec) for digging thr
       - [Features](#features)
   - [Installation](#installation)
   - [Usage](#usage)
+    - [CLI Binaries](#cli-binaries)
+      - [Dump bytecode](#dump-bytecode)
+      - [Dump strings](#dump-strings)
+      - [Dump Metro bundler modules](#dump-metro-bundler-modules)
+      - [Dump array values](#dump-array-values)
+      - [Dump object keys and values](#dump-object-keys-and-values)
+    - [API](#api)
       - [Reading File Header](#reading-file-header)
       - [Reading Strings](#reading-strings)
       - [Reading Function Headers](#reading-function-headers)
@@ -122,6 +129,116 @@ To add hermes_rs to your project, simply run:
 
 
 ## Usage
+
+### CLI Binaries  
+
+#### Dump bytecode
+
+Dumps the entire applications bytecode - definitely direct it to a file since it's probably going to be huge.  
+
+```sh
+cargo run --bin bytecode ./path/to/file/index.android.bundle > bytecode_ouput.txt
+```   
+
+#### Dump strings  
+
+Dumps all string definitions  
+
+```sh
+cargo run --bin strings ./path/to/file/index.android.bundle > strings_output.txt
+```   
+
+#### Dump Metro bundler modules  
+
+Most React Native applications use the Metro bundler as a pre-Hermes compilation step.
+This utility finds the bundler function and where it's used, then outputs JavaScript-like
+representation of calls to it.  
+
+```sh
+cargo run --bin modules ./path/to/file/index.android.bundle > output.txt
+```   
+
+**Example output**:  
+
+```js
+// Function "$FUNC_73" being registered as a Metro module with a moduleId of 0
+__d(73, 0, [1, 2, 5, 392, 2483, 1927, 1783, 698, 1348, 525, 2234] /* Arr IDX: 0 */);
+
+// Function "$FUNC_79" being registered as a Metro module with a moduleId of 1
+__d(79, 1, [...new Array(0)] /* Arr IDX: 0 */);
+
+// Function "$FUNC_81" being registered as a Metro module with a moduleId of 2
+__d(81, 2, [3] /* Arr IDX: 45 */);
+
+// Function "$FUNC_82" being registered as a Metro module with a moduleId of 3
+__d(82, 3, [4] /* Arr IDX: 50 */);
+
+// Function "$FUNC_133" being registered as a Metro module with a moduleId of 4
+__d(133, 4, [...new Array(0)] /* Arr IDX: 0 */);
+
+// Function "$FUNC_137" being registered as a Metro module with a moduleId of 5
+__d(137, 5, [6, 7, 8, 52, 191, 291, 292, 247, 277, 297, 298, 300, 301, 303, 310, 315, 316, 188, 319, 253, 320, 256, 287, 322, 323, 293, 325, 192, 328, 200, 331, 207, 212, 330, 83, 249, 288, 332, 143, 213, 334, 337, 351, 354, 347, 357, 359, 361, 362, 60, 242, 86, 308, 364, 223, 261, 262, 366, 369, 144, 126, 125, 370, 372, 59, 374, 376, 377, 379, 58, 44, 380, 29, 24, 382, 385, 386, 387, 389, 9, 390, 153, 30, 48, 67, 77, 164, 307, 64, 197, 391, 281] /* Arr IDX: 55 */);
+```
+
+#### Dump array values  
+
+Parses and dumps the contents of the Array storage buffer within the bundle in a JavaScript-like representation.  
+
+```sh
+cargo run --bin arrays ./path/to/file/index.android.bundle > output.txt
+```   
+
+**Example Output**:  
+
+```js
+const arr_53614 = ["Macintosh", "MacIntel", "MacPPC", "Mac68K"];
+const arr_53621 = ["iPhone", "iPad", "iPod"];
+const arr_53630 = ["Win32", "Win64", "Windows", "WinCE"];
+const arr_53632 = ["get"];
+const arr_53637 = ["head", "options"];
+const arr_53640 = ["put"];
+const arr_53642 = ["delete"];
+const arr_53659 = ["ETIMEDOUT", "ECONNRESET", "EADDRINUSE", "ESOCKETTIMEDOUT", "ECONNREFUSED", "EPIPE", "EHOSTUNREACH", "EAI_AGAIN"];
+const arr_53719 = ["ENOTFOUND", "ENETUNREACH", "UNABLE_TO_GET_ISSUER_CERT", "UNABLE_TO_GET_CRL", "UNABLE_TO_DECRYPT_CERT_SIGNATURE", "UNABLE_TO_DECRYPT_CRL_SIGNATURE", "UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY", "CERT_SIGNATURE_FAILURE", "CRL_SIGNATURE_FAILURE", "CERT_NOT_YET_VALID", "CERT_HAS_EXPIRED", "CRL_NOT_YET_VALID", "CRL_HAS_EXPIRED", "ERROR_IN_CERT_NOT_BEFORE_FIELD", "ERROR_IN_CERT_NOT_AFTER_FIELD", "ERROR_IN_CRL_LAST_UPDATE_FIELD", "ERROR_IN_CRL_NEXT_UPDATE_FIELD", "OUT_OF_MEM", "DEPTH_ZERO_SELF_SIGNED_CERT", "SELF_SIGNED_CERT_IN_CHAIN", "UNABLE_TO_GET_ISSUER_CERT_LOCALLY", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "CERT_CHAIN_TOO_LONG", "CERT_REVOKED", "INVALID_CA", "PATH_LENGTH_EXCEEDED", "INVALID_PURPOSE", "CERT_UNTRUSTED", "CERT_REJECTED"];
+const arr_53728 = ["log", "debug", "info", "warn"];
+const arr_53730 = ["error"];
+const arr_53732 = ["type"];
+```
+
+#### Dump object keys and values    
+
+Dump the raw object keys and values from an application bundle.  
+
+**Note:** The object keys and values aren't joined with this utility,
+as they're correlated by individual indexes with the `NewObjectWithBuffer` or `NewObjectWithBufferLong` instructions.
+To see proper Object key/value pairs, use the [Dump Bytecode](#dump-bytecode) utility. When you disassemble the binary
+with this utility, it'll print out the full object next to the two instructions above in the output.  
+
+```sh
+cargo run --bin objects ./path/to/file/index.android.bundle > output.txt
+```   
+
+
+**Example Output**:
+
+```js
+const objkeys_7 = ["trace", "info", "warn"];
+const objkeys_9 = ["error"];
+const objkeys_12 = ["value", "enumerable"];
+const objkeys_16 = ["message", "title", "color"];
+const objkeys_19 = ["channelId"];
+const objkeys_22 = ["value", "enumerable"];
+const objkeys_27 = ["configurable", "writable"];
+....
+const objvals_17 = [0, 1, 2, 3];
+const objvals_18 = [true];
+const objvals_19 = [false];
+const objvals_24 = ["You have new messages", "Kustomer Support"];
+const objvals_25 = [null];
+
+```
+
+### API  
 
 #### Reading File Header
 

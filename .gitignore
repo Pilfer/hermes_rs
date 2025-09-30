@@ -22,3 +22,5 @@ foo
 string_merging
 examples/string_merge*
 examples/merge*
+src/bin/decompile
+decompiler

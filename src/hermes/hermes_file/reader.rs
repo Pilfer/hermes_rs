@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io::{self};
 
+use crate::hermes::array_parser::ArrayTypes;
 use crate::hermes::big_int_table::BigIntTableEntry;
 use crate::hermes::debug_info::DebugInfoOffsets;
 use crate::hermes::exception_handler::ExceptionHandlerInfo;
@@ -16,7 +17,9 @@ use crate::hermes::function_sources::FunctionSourceEntry;
 use crate::hermes::regexp_table::RegExpTableEntry;
 use crate::hermes::string_kind::StringKindEntry;
 use crate::hermes::string_table::{OverflowStringTableEntry, SmallStringTableEntry};
+use crate::hermes::{print_array_val, print_array_vals};
 use crate::hermes::{HermesInstruction, InstructionParser, Serializable};
+use crate::match_instruction;
 
 use super::builder::StringTypePair;
 use super::{FunctionBytecode, FunctionInstructions, HermesFile, HermesStructReader};
@@ -381,6 +384,462 @@ where
         self.footer = buf;
     }
 
+    pub fn get_array_buffer(&mut self, idx: usize, slice_size: usize) -> (usize, Vec<ArrayTypes>) {
+        let buf_size = if slice_size > 0 {
+            slice_size + idx
+        } else {
+            self.array_buffer_storage.len()
+        };
+
+        let buf = &self.array_buffer_storage[idx..buf_size];
+        let mut current_idx = 0; // Start at 0 for relative indexing within buf
+        let tag = buf[current_idx];
+
+        let left_in_seq: u32;
+
+        if (tag & 0x80) != 0 {
+            left_in_seq = (((tag & 0x0f) as u32) << 8) | (buf[current_idx + 1] as u32);
+        } else {
+            left_in_seq = (tag & 0x0f) as u32;
+        }
+
+        // Define tag constants
+        const NULL_TAG: u8 = 0 << 4;
+        const TRUE_TAG: u8 = 1 << 4;
+        const FALSE_TAG: u8 = 2 << 4;
+        const NUMBER_TAG: u8 = 3 << 4;
+        const LONG_STRING_TAG: u8 = 4 << 4;
+        const SHORT_STRING_TAG: u8 = 5 << 4;
+        const BYTE_STRING_TAG: u8 = 6 << 4;
+        const INTEGER_TAG: u8 = 7 << 4;
+
+        // Store parsed elements
+        let mut elements_parsed = 0;
+
+        let mut parsed_values: Vec<ArrayTypes> = vec![];
+
+        // Parse sequences until we've parsed all left_in_seq elements
+        while elements_parsed < left_in_seq && current_idx < buf.len() {
+            // Get the tag for this sequence
+            let sequence_tag = buf[current_idx];
+            let tag_type = sequence_tag & 0x70;
+            let sequence_length: u32;
+
+            // Check if this sequence has overflow (extended length)
+            if (sequence_tag & 0x80) != 0 {
+                if current_idx + 1 >= buf.len() {
+                    println!("Warning: Not enough bytes for overflow sequence length");
+                    break;
+                }
+                sequence_length =
+                    (((sequence_tag & 0x0f) as u32) << 8) | (buf[current_idx + 1] as u32);
+                current_idx += 2;
+            } else {
+                sequence_length = (sequence_tag & 0x0f) as u32;
+                current_idx += 1;
+            }
+
+            // Parse 'sequence_length' number of elements of this type
+            for _seq_idx in 0..sequence_length {
+                if elements_parsed >= left_in_seq {
+                    break;
+                }
+
+                if current_idx >= buf.len() {
+                    println!("Warning: Reached end of buffer before parsing all elements");
+                    break;
+                }
+
+                match tag_type {
+                    NULL_TAG => {
+                        parsed_values.push(ArrayTypes::NullValue {});
+                    }
+                    TRUE_TAG => {
+                        parsed_values.push(ArrayTypes::TrueValue { value: true });
+                        // No additional bytes to read for true
+                    }
+                    FALSE_TAG => {
+                        parsed_values.push(ArrayTypes::FalseValue { value: false });
+                        // No additional bytes to read for false
+                    }
+                    NUMBER_TAG => {
+                        if current_idx + 8 <= buf.len() {
+                            let val = u64::from_le_bytes(
+                                buf[current_idx..current_idx + 8].try_into().unwrap(),
+                            );
+                            parsed_values.push(ArrayTypes::NumberValue { value: val });
+                            current_idx += 8; // 8 bytes for u64
+                        } else {
+                            println!("  Warning: Not enough bytes for NUMBER_TAG");
+                            break;
+                        }
+                    }
+                    LONG_STRING_TAG => {
+                        if current_idx + 4 <= buf.len() {
+                            let val = u32::from_le_bytes(
+                                buf[current_idx..current_idx + 4].try_into().unwrap(),
+                            );
+                            parsed_values.push(ArrayTypes::LongStringValue { value: val });
+                            current_idx += 4;
+                        } else {
+                            println!("  Warning: Not enough bytes for LONG_STRING_TAG");
+                            break;
+                        }
+                    }
+                    SHORT_STRING_TAG => {
+                        if current_idx + 2 <= buf.len() {
+                            let val = u16::from_le_bytes(
+                                buf[current_idx..current_idx + 2].try_into().unwrap(),
+                            );
+                            parsed_values.push(ArrayTypes::ShortStringValue { value: val });
+                            current_idx += 2;
+                        } else {
+                            println!("  Warning: Not enough bytes for SHORT_STRING_TAG");
+                            break;
+                        }
+                    }
+                    BYTE_STRING_TAG => {
+                        if current_idx + 1 <= buf.len() {
+                            let val = buf[current_idx];
+                            parsed_values.push(ArrayTypes::ByteStringValue { value: val });
+                            current_idx += 1;
+                        } else {
+                            println!("  Warning: Not enough bytes for BYTE_STRING_TAG");
+                            break;
+                        }
+                    }
+                    INTEGER_TAG => {
+                        if current_idx + 4 <= buf.len() {
+                            let val = u32::from_le_bytes(
+                                buf[current_idx..current_idx + 4].try_into().unwrap(),
+                            );
+                            parsed_values.push(ArrayTypes::IntegerValue { value: val });
+                            current_idx += 4;
+                        } else {
+                            println!("  Warning: Not enough bytes for INTEGER_TAG");
+                            break;
+                        }
+                    }
+                    _ => {
+                        println!(
+                            "  Element {}: Unknown tag: {:02x}",
+                            elements_parsed, tag_type
+                        );
+                        current_idx += 1;
+                    }
+                }
+
+                elements_parsed += 1;
+            }
+        }
+
+        (idx + current_idx, parsed_values) // Return absolute index
+    }
+
+    pub fn get_object_key_buffer(
+        &mut self,
+        idx: usize,
+        slice_size: usize,
+    ) -> (usize, Vec<ArrayTypes>) {
+        let buf_size = if slice_size > 0 {
+            slice_size + idx
+        } else {
+            self.object_key_buffer.len()
+        };
+
+        let buf = &self.object_key_buffer[idx..buf_size];
+        let mut current_idx = 0; // Start at 0 for relative indexing within buf
+        let tag = buf[current_idx];
+
+        let left_in_seq: u32;
+        if (tag & 0x80) != 0 {
+            left_in_seq = (((tag & 0x0f) as u32) << 8) | (buf[current_idx + 1] as u32);
+        } else {
+            left_in_seq = (tag & 0x0f) as u32;
+        }
+
+        // Define tag constants
+        const NULL_TAG: u8 = 0 << 4;
+        const TRUE_TAG: u8 = 1 << 4;
+        const FALSE_TAG: u8 = 2 << 4;
+        const NUMBER_TAG: u8 = 3 << 4;
+        const LONG_STRING_TAG: u8 = 4 << 4;
+        const SHORT_STRING_TAG: u8 = 5 << 4;
+        const BYTE_STRING_TAG: u8 = 6 << 4;
+        const INTEGER_TAG: u8 = 7 << 4;
+
+        // Store parsed elements
+        let mut elements_parsed = 0;
+
+        let mut parsed_values: Vec<ArrayTypes> = vec![];
+
+        // Parse sequences until we've parsed all left_in_seq elements
+        while elements_parsed < left_in_seq && current_idx < buf.len() {
+            let sequence_tag = buf[current_idx];
+            let tag_type = sequence_tag & 0x70;
+            let sequence_length: u32;
+
+            if (sequence_tag & 0x80) != 0 {
+                if current_idx + 1 >= buf.len() {
+                    println!("Warning: Not enough bytes for overflow sequence length");
+                    break;
+                }
+                sequence_length =
+                    (((sequence_tag & 0x0f) as u32) << 8) | (buf[current_idx + 1] as u32);
+                current_idx += 2;
+            } else {
+                sequence_length = (sequence_tag & 0x0f) as u32;
+                current_idx += 1;
+            }
+
+            // Parse 'sequence_length' number of elements of this type
+            for _seq_idx in 0..sequence_length {
+                if elements_parsed >= left_in_seq {
+                    break;
+                }
+
+                if current_idx >= buf.len() {
+                    println!("Warning: Reached end of buffer before parsing all elements");
+                    break;
+                }
+
+                match tag_type {
+                    NULL_TAG => {
+                        parsed_values.push(ArrayTypes::NullValue {});
+                    }
+                    TRUE_TAG => {
+                        parsed_values.push(ArrayTypes::TrueValue { value: true });
+                    }
+                    FALSE_TAG => {
+                        parsed_values.push(ArrayTypes::FalseValue { value: false });
+                    }
+                    NUMBER_TAG => {
+                        if current_idx + 8 <= buf.len() {
+                            let val = u64::from_le_bytes(
+                                buf[current_idx..current_idx + 8].try_into().unwrap(),
+                            );
+                            parsed_values.push(ArrayTypes::NumberValue { value: val });
+                            current_idx += 8;
+                        } else {
+                            println!("  Warning: Not enough bytes for NUMBER_TAG");
+                            break;
+                        }
+                    }
+                    LONG_STRING_TAG => {
+                        if current_idx + 4 <= buf.len() {
+                            let val = u32::from_le_bytes(
+                                buf[current_idx..current_idx + 4].try_into().unwrap(),
+                            );
+                            parsed_values.push(ArrayTypes::LongStringValue { value: val });
+                            current_idx += 4;
+                        } else {
+                            println!("  Warning: Not enough bytes for LONG_STRING_TAG");
+                            break;
+                        }
+                    }
+                    SHORT_STRING_TAG => {
+                        if current_idx + 2 <= buf.len() {
+                            let val = u16::from_le_bytes(
+                                buf[current_idx..current_idx + 2].try_into().unwrap(),
+                            );
+                            parsed_values.push(ArrayTypes::ShortStringValue { value: val });
+                            current_idx += 2;
+                        } else {
+                            println!("  Warning: Not enough bytes for SHORT_STRING_TAG");
+                            break;
+                        }
+                    }
+                    BYTE_STRING_TAG => {
+                        if current_idx + 1 <= buf.len() {
+                            let val = buf[current_idx];
+                            parsed_values.push(ArrayTypes::ByteStringValue { value: val });
+                            current_idx += 1;
+                        } else {
+                            println!("  Warning: Not enough bytes for BYTE_STRING_TAG");
+                            break;
+                        }
+                    }
+                    INTEGER_TAG => {
+                        if current_idx + 4 <= buf.len() {
+                            let val = u32::from_le_bytes(
+                                buf[current_idx..current_idx + 4].try_into().unwrap(),
+                            );
+                            parsed_values.push(ArrayTypes::IntegerValue { value: val });
+                            current_idx += 4;
+                        } else {
+                            println!("  Warning: Not enough bytes for INTEGER_TAG");
+                            break;
+                        }
+                    }
+                    _ => {
+                        println!(
+                            "  Element {}: Unknown tag: {:02x}",
+                            elements_parsed, tag_type
+                        );
+
+                        current_idx += 1;
+                    }
+                }
+
+                elements_parsed += 1;
+            }
+        }
+
+        (idx + current_idx, parsed_values) // Return absolute index
+    }
+
+    pub fn get_object_val_buffer(
+        &mut self,
+        idx: usize,
+        slice_size: usize,
+    ) -> (usize, Vec<ArrayTypes>) {
+        let buf_size = if slice_size > 0 {
+            slice_size + idx
+        } else {
+            self.object_val_buffer.len()
+        };
+
+        let buf = &self.object_val_buffer[idx..buf_size];
+        let mut current_idx = 0; // Start at 0 for relative indexing within buf
+        let tag = buf[current_idx];
+
+        let left_in_seq: u32;
+        if (tag & 0x80) != 0 {
+            left_in_seq = (((tag & 0x0f) as u32) << 8) | (buf[current_idx + 1] as u32);
+        } else {
+            left_in_seq = (tag & 0x0f) as u32;
+        }
+
+        // Define tag constants
+        const NULL_TAG: u8 = 0 << 4;
+        const TRUE_TAG: u8 = 1 << 4;
+        const FALSE_TAG: u8 = 2 << 4;
+        const NUMBER_TAG: u8 = 3 << 4;
+        const LONG_STRING_TAG: u8 = 4 << 4;
+        const SHORT_STRING_TAG: u8 = 5 << 4;
+        const BYTE_STRING_TAG: u8 = 6 << 4;
+        const INTEGER_TAG: u8 = 7 << 4;
+
+        // Store parsed elements
+        let mut elements_parsed = 0;
+
+        let mut parsed_values: Vec<ArrayTypes> = vec![];
+
+        // Parse sequences until we've parsed all left_in_seq elements
+        while elements_parsed < left_in_seq && current_idx < buf.len() {
+            let sequence_tag = buf[current_idx];
+            let tag_type = sequence_tag & 0x70;
+            let sequence_length: u32;
+
+            if (sequence_tag & 0x80) != 0 {
+                if current_idx + 1 >= buf.len() {
+                    println!("Warning: Not enough bytes for overflow sequence length");
+                    break;
+                }
+                sequence_length =
+                    (((sequence_tag & 0x0f) as u32) << 8) | (buf[current_idx + 1] as u32);
+                current_idx += 2;
+            } else {
+                sequence_length = (sequence_tag & 0x0f) as u32;
+                current_idx += 1;
+            }
+
+            // Parse 'sequence_length' number of elements of this type
+            for _seq_idx in 0..sequence_length {
+                if elements_parsed >= left_in_seq {
+                    break;
+                }
+
+                if current_idx >= buf.len() {
+                    println!("Warning: Reached end of buffer before parsing all elements");
+                    break;
+                }
+
+                match tag_type {
+                    NULL_TAG => {
+                        parsed_values.push(ArrayTypes::NullValue {});
+                    }
+                    TRUE_TAG => {
+                        parsed_values.push(ArrayTypes::TrueValue { value: true });
+                    }
+                    FALSE_TAG => {
+                        parsed_values.push(ArrayTypes::FalseValue { value: false });
+                    }
+                    NUMBER_TAG => {
+                        if current_idx + 8 <= buf.len() {
+                            let val = u64::from_le_bytes(
+                                buf[current_idx..current_idx + 8].try_into().unwrap(),
+                            );
+                            parsed_values.push(ArrayTypes::NumberValue { value: val });
+                            current_idx += 8;
+                        } else {
+                            println!("  Warning: Not enough bytes for NUMBER_TAG");
+                            break;
+                        }
+                    }
+                    LONG_STRING_TAG => {
+                        if current_idx + 4 <= buf.len() {
+                            let val = u32::from_le_bytes(
+                                buf[current_idx..current_idx + 4].try_into().unwrap(),
+                            );
+                            parsed_values.push(ArrayTypes::LongStringValue { value: val });
+                            current_idx += 4;
+                        } else {
+                            println!("  Warning: Not enough bytes for LONG_STRING_TAG");
+                            break;
+                        }
+                    }
+                    SHORT_STRING_TAG => {
+                        if current_idx + 2 <= buf.len() {
+                            let val = u16::from_le_bytes(
+                                buf[current_idx..current_idx + 2].try_into().unwrap(),
+                            );
+                            parsed_values.push(ArrayTypes::ShortStringValue { value: val });
+                            current_idx += 2;
+                        } else {
+                            println!("  Warning: Not enough bytes for SHORT_STRING_TAG");
+                            break;
+                        }
+                    }
+                    BYTE_STRING_TAG => {
+                        if current_idx + 1 <= buf.len() {
+                            let val = buf[current_idx];
+                            parsed_values.push(ArrayTypes::ByteStringValue { value: val });
+                            current_idx += 1;
+                        } else {
+                            println!("  Warning: Not enough bytes for BYTE_STRING_TAG");
+                            break;
+                        }
+                    }
+                    INTEGER_TAG => {
+                        if current_idx + 4 <= buf.len() {
+                            let val = u32::from_le_bytes(
+                                buf[current_idx..current_idx + 4].try_into().unwrap(),
+                            );
+                            parsed_values.push(ArrayTypes::IntegerValue { value: val });
+                            current_idx += 4;
+                        } else {
+                            println!("  Warning: Not enough bytes for INTEGER_TAG");
+                            break;
+                        }
+                    }
+                    _ => {
+                        println!(
+                            "  Element {}: Unknown tag: {:02x}",
+                            elements_parsed, tag_type
+                        );
+
+                        current_idx += 1;
+                    }
+                }
+
+                elements_parsed += 1;
+            }
+        }
+
+        (idx + current_idx, parsed_values) // Return absolute index
+    }
+
     /*
      * Returns the bytecode for each function in the Hermes file.
      */
@@ -463,7 +922,6 @@ where
                             string: self.get_string_from_storage_by_index(string_id),
                             kind: sk.kind,
                         });
-                        // println!("{:?}-{:?}", sk.kind, self.get_string_from_storage_by_index(string_id));
                         string_id += 1;
                     }
                 }
@@ -551,6 +1009,10 @@ where
             let mut r_cursor = io::Cursor::new(byte_iter.as_slice());
 
             let ins_obj: Option<HermesInstruction> = match self.header.version {
+                #[cfg(feature = "v76")]
+                76 => Some(HermesInstruction::V76(
+                    crate::hermes::v76::Instruction::deserialize(&mut r_cursor, op),
+                )),
                 #[cfg(feature = "v84")]
                 84 => Some(HermesInstruction::V84(
                     crate::hermes::v84::Instruction::deserialize(&mut r_cursor, op),
@@ -803,6 +1265,9 @@ where
                 let mut byte_index = 0;
 
                 let mut labels: HashMap<u32, u32> = HashMap::new();
+                let mut label_idx = 0;
+                let mut output = vec![];
+
                 // Iterate over bytecode_buf and parse the instructions
                 while let Some(&op_byte) = byte_iter.next() {
                     let op = op_byte;
@@ -851,8 +1316,7 @@ where
 
                     if let Some(ins) = ins_obj {
                         // This label code may be the worst code I've ever written
-                        let mut label_idx = 0;
-
+                        // TODO: Need to handle jumps better here i think
                         // Exception handler logic here
                         if fh.flags().has_exception_handler {
                             for (idx, eh) in fh.exception_handlers().iter().enumerate() {
@@ -871,7 +1335,7 @@ where
                                 };
 
                                 if has_label {
-                                    println!("    L{}:", label_idx);
+                                    output.push(format!("\tL{}:", label_idx));
                                 }
                             }
                         }
@@ -880,20 +1344,22 @@ where
                         let mut display_str = ins.display(self);
                         if ins.is_jmp() {
                             let addy = ins.get_address_field();
-                            label_idx += 1;
-                            labels.insert(addy, label_idx as u32);
 
-                            let from = format!("{}", addy).to_string();
-                            let to = format!("L{}", label_idx).to_string();
-                            display_str = display_str.replace(&from, &to);
-                        }
+                            // Track labels properly
+                            if !labels.contains_key(&addy) {
+                                label_idx += 1;
+                                labels.insert(addy, label_idx as u32);
+                            }
 
-                        if labels.contains_key(&byte_index) {
-                            println!("    L{}:", labels.get(&byte_index).unwrap());
+                            let original = format!("{}", addy).to_string();
+                            let enriched_label =
+                                format!("L{}, r0 # Go to Addr: {}", label_idx, addy);
+                            display_str = display_str.replace(&original, &enriched_label);
                         }
 
                         // build_instructions
-                        println!("{:#010X}\t{}", byte_index, display_str);
+                        output.push(format!("{:?}\t{}", byte_index, display_str));
+                        // println!("{:#010X}\t{}", byte_index, display_str);
                         let size = ins.size() - 1; // Have to subtract - 1 for the opcode
                         instructions_list.push(ins);
 
@@ -906,6 +1372,174 @@ where
                             }
                         }
                     }
+                }
+
+                // populate labels into output
+                for (lidx, line) in output.iter().enumerate() {
+                    if labels.contains_key(&(lidx as u32)) {
+                        println!("\t\tL{}:", labels.get(&(lidx as u32)).unwrap());
+                    }
+                    println!("{}", line);
+                }
+            }
+        }
+    }
+
+    pub fn print_bytecode_new(&mut self) {
+        {
+            let function_headers: Vec<_> = self
+                .function_headers
+                .iter()
+                .enumerate()
+                .map(|(i, fh)| (i, fh.clone()))
+                .collect();
+
+            for (fidx, fh) in function_headers {
+                let bytecode = self.get_func_bytecode(fidx as u32);
+                self._reader
+                    .seek(io::SeekFrom::Start(fh.offset() as u64))
+                    .unwrap();
+
+                let func_name_idx = fh.func_name() as usize;
+
+                let myfunc = self.string_storage.get(func_name_idx).unwrap();
+                println!("------------------------------------------------");
+                let func_start = myfunc.offset;
+                let mut func_name = String::from_utf8(
+                    self.string_storage_bytes
+                        [func_start as usize..(func_start + myfunc.length) as usize]
+                        .to_vec(),
+                )
+                .unwrap();
+
+                if func_name.is_empty() {
+                    func_name = format!("$FUNC_{}", fidx);
+                }
+
+                // Print out the FunctionHeader type - this makes things easier to debug.
+                // There's no real spec, so I can get away with dropping a # comment here.
+                let is_large = match fh {
+                    FunctionHeader::Small(_) => false,
+                    FunctionHeader::Large(_) => true,
+                };
+
+                println!(
+                    "{}<{}>({:?} params, {:?} registers, {:?} symbols): # Type: {}FunctionHeader - funcID: {} ({} bytes @ {})\n",
+                    match fh.flags().prohibit_invoke {
+                        FunctionHeaderFlagProhibitions::ProhibitCall => "Constructor",
+                        FunctionHeaderFlagProhibitions::ProhibitConstruct => "NCFunction",
+                        FunctionHeaderFlagProhibitions::ProhibitNone => "Function",
+                    },
+                    func_name,
+                    fh.param_count(),
+                    fh.frame_size(),
+                    fh.env_size(),
+                    if is_large { "Large" } else { "Small" },
+                    fidx,
+                    fh.byte_size(),
+                    self._reader.stream_position().unwrap(),
+                );
+
+                let mut labels: HashMap<u32, u32> = HashMap::new();
+                let mut label_idx = 0;
+                let mut output = vec![];
+
+                for (_idx, ins) in bytecode.iter().enumerate() {
+                    if fh.flags().has_exception_handler {
+                        for (idx, eh) in fh.exception_handlers().iter().enumerate() {
+                            let ehidx = idx + 1;
+                            let has_label = if _idx == eh.start as usize {
+                                label_idx += ehidx + 1;
+                                true
+                            } else if _idx == eh.end as usize {
+                                label_idx += ehidx + 2;
+                                true
+                            } else if _idx == eh.target as usize {
+                                label_idx += ehidx;
+                                true
+                            } else {
+                                false
+                            };
+
+                            if has_label {
+                                output.push(format!("\tL{}:", label_idx));
+                            }
+                        }
+                    }
+
+                    // Check if the instruction is a jump target
+                    let mut display_str = ins.display(self);
+                    if ins.is_jmp() {
+                        let addy = ins.get_address_field();
+
+                        // Track labels properly
+                        if !labels.contains_key(&addy) {
+                            label_idx += 1;
+                            labels.insert(addy, label_idx as u32);
+                        }
+
+                        let original = format!("{}", addy).to_string();
+                        let enriched_label = format!("L{}, r0 # Go to Addr: {}", label_idx, addy);
+                        display_str = display_str.replace(&original, &enriched_label);
+                    }
+
+                    let extra = match_instruction!(ins, target, {
+                        match target {
+                            Instruction::NewArrayWithBuffer(t) => {
+                                let arrbuf = self.get_array_buffer(t.p2.0 as usize, 0);
+                                format!("{}", print_array_vals(self, &arrbuf.1))
+                            }
+                            Instruction::NewArrayWithBufferLong(t) => {
+                                let arrbuf = self.get_array_buffer(t.p2.0 as usize, 0);
+                                format!("{}", print_array_vals(self, &arrbuf.1))
+                            }
+                            Instruction::NewArray(t) => {
+                                format!("new Array({})", t.p0.0)
+                            }
+                            Instruction::NewObjectWithBuffer(t) => {
+                                let keybuf = self.get_object_key_buffer(t.p2.0 as usize, 0);
+                                let valbuf = self.get_object_val_buffer(t.p3.0 as usize, 0);
+                                let mut joined = vec![];
+                                for (key, value) in keybuf.1.iter().zip(valbuf.1.iter()) {
+                                    joined.push(format!(
+                                        "{}: {}",
+                                        print_array_val(self, key),
+                                        print_array_val(self, value)
+                                    ));
+                                }
+                                format!("{{{}}}", joined.join(", "))
+                            }
+                            Instruction::NewObjectWithBufferLong(t) => {
+                                let keybuf = self.get_object_key_buffer(t.p2.0 as usize, 0);
+                                let valbuf = self.get_object_val_buffer(t.p3.0 as usize, 0);
+                                let mut joined = vec![];
+                                for (key, value) in keybuf.1.iter().zip(valbuf.1.iter()) {
+                                    joined.push(format!(
+                                        "{}: {}",
+                                        print_array_val(self, key),
+                                        print_array_val(self, value)
+                                    ));
+                                }
+                                format!("{{{}}}", joined.join(", "))
+                            }
+                            _ => "".to_string(),
+                        }
+                    });
+
+                    // build_instructions
+                    if extra.is_empty() {
+                        output.push(format!("{:?}\t{}", _idx, display_str));
+                    } else {
+                        output.push(format!("{:?}\t{} // {}", _idx, display_str, extra));
+                    }
+                }
+
+                // populate labels into output
+                for (lidx, line) in output.iter().enumerate() {
+                    if labels.contains_key(&(lidx as u32)) {
+                        println!("\t\tL{}:", labels.get(&(lidx as u32)).unwrap());
+                    }
+                    println!("{}", line);
                 }
             }
         }

@@ -23,5 +23,5 @@ fn main() {
 
     let mut hermes_file = HermesFile::deserialize(&mut reader);
 
-    hermes_file.print_bytecode();
+    hermes_file.print_bytecode_new();
 }

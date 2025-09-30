@@ -1,3 +1,4 @@
+pub mod array_parser;
 pub mod big_int_table;
 pub mod bytecode_options;
 pub mod cjs_module;
@@ -24,6 +25,8 @@ pub use header::{HermesHeader, HermesStructReader};
 pub use hermes_file::HermesFile;
 pub use string_kind::{StringKind, StringKindEntry};
 pub use string_table::{OverflowStringTableEntry, SmallStringTableEntry};
+
+use array_parser::ArrayTypes;
 
 // pub type Reg8 = u8;
 /*
@@ -603,17 +606,12 @@ macro_rules! define_opcode {
 
     #[allow(unused_mut, unused_assignments)]
     fn get_address_field(&self) -> u32 {
-      let mut val: u32 = 0;
-
       $(
-        val = match stringify!($arg) {
-          // "Addr8" | "Addr32" => self.$field as u32,
-          "Addr8" | "Addr32" => self.$field.into(),
-          _ => 0
-        };
+        if matches!(stringify!($arg), "Addr8" | "Addr32") {
+          return self.$field.into();
+        }
       )*
-      val as u32
-
+      0 // Return 0 if no address field found
     }
 
     fn get_string_field_names(&self) -> Vec<&str> {
@@ -1032,7 +1030,9 @@ impl HermesInstruction {
             95 => HermesInstruction::V95(v95::Instruction::deserialize(r, op)),
             #[cfg(feature = "v96")]
             96 => HermesInstruction::V96(v96::Instruction::deserialize(r, op)),
-            _ => HermesInstruction::V96(v96::Instruction::deserialize(r, op)),
+            _ => {
+                panic!("Unsupported HBC version: {:?}. Check Cargo.toml features to see if this HBC version is enabled.", op);
+            }
         }
     }
 }
@@ -1168,4 +1168,148 @@ macro_rules! define_instructions_alt {
           ])
       }
   };
+}
+
+#[macro_export]
+macro_rules! match_instruction {
+    ($instruction:expr, $insn_var:ident, $code:block) => {
+        match $instruction {
+            #[cfg(feature = "v76")]
+            HermesInstruction::V76($insn_var) => {
+                use crate::hermes::v76::*;
+                $code
+            }
+            #[cfg(feature = "v84")]
+            HermesInstruction::V84($insn_var) => {
+                use crate::hermes::v84::*;
+                $code
+            }
+            #[cfg(feature = "v89")]
+            HermesInstruction::V89($insn_var) => {
+                use crate::hermes::v89::*;
+                $code
+            }
+            #[cfg(feature = "v90")]
+            HermesInstruction::V90($insn_var) => {
+                use crate::hermes::v90::*;
+                $code
+            }
+            #[cfg(feature = "v93")]
+            HermesInstruction::V93($insn_var) => {
+                use crate::hermes::v93::*;
+                $code
+            }
+            #[cfg(feature = "v94")]
+            HermesInstruction::V94($insn_var) => {
+                use crate::hermes::v94::*;
+                $code
+            }
+            #[cfg(feature = "v95")]
+            HermesInstruction::V95($insn_var) => {
+                use crate::hermes::v95::*;
+                $code
+            }
+            #[cfg(feature = "v96")]
+            HermesInstruction::V96($insn_var) => {
+                use crate::hermes::v96::*;
+                $code
+            }
+        }
+    };
+}
+
+pub fn print_array_vals<R>(hermes_file: &HermesFile<R>, array_vals: &Vec<ArrayTypes>) -> String
+where
+    R: io::Read + io::BufRead + io::Seek,
+{
+    let mut js_values: Vec<String> = Vec::new();
+    for arr_val in array_vals {
+        let v = match arr_val {
+            ArrayTypes::NullValue {} => {
+                // JS null
+                "null".to_string()
+            }
+            ArrayTypes::TrueValue { value: true } => {
+                // JS true
+                "true".to_string()
+            }
+            ArrayTypes::FalseValue { value: false } => {
+                // JS false
+                "false".to_string()
+            }
+            ArrayTypes::NumberValue { value: val } => {
+                // JS number
+                format!("{}", val)
+            }
+            ArrayTypes::LongStringValue { value: val } => {
+                // JS string literal, quoted
+                let s = hermes_file.get_string_from_storage_by_index(*val as usize);
+                format!("{:?}", s)
+            }
+            ArrayTypes::ShortStringValue { value: val } => {
+                let s = hermes_file.get_string_from_storage_by_index(*val as usize);
+                format!("{:?}", s)
+            }
+            ArrayTypes::ByteStringValue { value: val } => {
+                let s = hermes_file.get_string_from_storage_by_index(*val as usize);
+                format!("{:?}", s)
+            }
+            ArrayTypes::IntegerValue { value: val } => {
+                // JS number
+                format!("{}", val)
+            }
+            _ => {
+                // fallback: JS undefined
+                "undefined".to_string()
+            }
+        };
+        js_values.push(v);
+    }
+
+    format!("Array Contents: [{}]", js_values.join(", "))
+}
+
+pub fn print_array_val<R>(hermes_file: &HermesFile<R>, array_val: &ArrayTypes) -> String
+where
+    R: io::Read + io::BufRead + io::Seek,
+{
+    match array_val {
+        ArrayTypes::NullValue {} => {
+            // JS null
+            "null".to_string()
+        }
+        ArrayTypes::TrueValue { value: true } => {
+            // JS true
+            "true".to_string()
+        }
+        ArrayTypes::FalseValue { value: false } => {
+            // JS false
+            "false".to_string()
+        }
+        ArrayTypes::NumberValue { value: val } => {
+            // JS number
+            format!("{}", val)
+        }
+        ArrayTypes::LongStringValue { value: val } => {
+            // JS string literal, quoted
+            let s = hermes_file.get_string_from_storage_by_index(*val as usize);
+            format!("{:?}", s)
+        }
+        ArrayTypes::ShortStringValue { value: val } => {
+            let s = hermes_file.get_string_from_storage_by_index(*val as usize);
+            format!("{:?}", s)
+        }
+        ArrayTypes::ByteStringValue { value: val } => {
+            let s = hermes_file.get_string_from_storage_by_index(*val as usize);
+            format!("{:?}", s)
+        }
+        ArrayTypes::IntegerValue { value: val } => {
+            // JS number
+            format!("{}", val)
+        }
+        _ => {
+            // fallback: JS undefined
+            "undefined".to_string()
+        }
+    }
 }

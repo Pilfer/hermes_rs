@@ -1,6 +1,7 @@
 use hermes_rs::{define_instructions, InstructionParser};
 
 fn main() {
+    #[cfg(feature = "v96")]
     // Use the define_instructions macro. The first parameter is the hermes version
     let instructions = define_instructions!(
         hermes_rs::v96,
