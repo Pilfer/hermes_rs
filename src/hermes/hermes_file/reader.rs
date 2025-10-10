@@ -1545,6 +1545,327 @@ where
         }
     }
 
+    pub fn get_disassembled_bytecode(&mut self) -> String {
+        {
+            let mut output_buf: Vec<String> = vec![];
+            let function_headers: Vec<_> = self
+                .function_headers
+                .iter()
+                .enumerate()
+                .map(|(i, fh)| (i, fh.clone()))
+                .collect();
+
+            for (fidx, fh) in function_headers {
+                let bytecode = self.get_func_bytecode(fidx as u32);
+                self._reader
+                    .seek(io::SeekFrom::Start(fh.offset() as u64))
+                    .unwrap();
+
+                let func_name_idx = fh.func_name() as usize;
+
+                let myfunc = self.string_storage.get(func_name_idx).unwrap();
+                output_buf.push("------------------------------------------------\n".to_string());
+                let func_start = myfunc.offset;
+                let mut func_name = String::from_utf8(
+                    self.string_storage_bytes
+                        [func_start as usize..(func_start + myfunc.length) as usize]
+                        .to_vec(),
+                )
+                .unwrap();
+
+                if func_name.is_empty() {
+                    func_name = format!("$FUNC_{}", fidx);
+                }
+
+                // Print out the FunctionHeader type - this makes things easier to debug.
+                // There's no real spec, so I can get away with dropping a # comment here.
+                let is_large = match fh {
+                    FunctionHeader::Small(_) => false,
+                    FunctionHeader::Large(_) => true,
+                };
+
+                output_buf.push(format!(
+                    "{}<{}>({:?} params, {:?} registers, {:?} symbols): # Type: {}FunctionHeader - funcID: {} ({} bytes @ {})\n",
+                    match fh.flags().prohibit_invoke {
+                        FunctionHeaderFlagProhibitions::ProhibitCall => "Constructor",
+                        FunctionHeaderFlagProhibitions::ProhibitConstruct => "NCFunction",
+                        FunctionHeaderFlagProhibitions::ProhibitNone => "Function",
+                    },
+                    func_name,
+                    fh.param_count(),
+                    fh.frame_size(),
+                    fh.env_size(),
+                    if is_large { "Large" } else { "Small" },
+                    fidx,
+                    fh.byte_size(),
+                    self._reader.stream_position().unwrap(),
+                ).to_string());
+
+                let mut labels: HashMap<u32, u32> = HashMap::new();
+                let mut label_idx = 0;
+                let mut output = vec![];
+
+                for (_idx, ins) in bytecode.iter().enumerate() {
+                    if fh.flags().has_exception_handler {
+                        for (idx, eh) in fh.exception_handlers().iter().enumerate() {
+                            let ehidx = idx + 1;
+                            let has_label = if _idx == eh.start as usize {
+                                label_idx += ehidx + 1;
+                                true
+                            } else if _idx == eh.end as usize {
+                                label_idx += ehidx + 2;
+                                true
+                            } else if _idx == eh.target as usize {
+                                label_idx += ehidx;
+                                true
+                            } else {
+                                false
+                            };
+
+                            if has_label {
+                                output.push(format!("\tL{}:", label_idx));
+                            }
+                        }
+                    }
+
+                    // Check if the instruction is a jump target
+                    let mut display_str = ins.display(self);
+                    if ins.is_jmp() {
+                        let addy = ins.get_address_field();
+
+                        // Track labels properly
+                        if !labels.contains_key(&addy) {
+                            label_idx += 1;
+                            labels.insert(addy, label_idx as u32);
+                        }
+
+                        let original = format!("{}", addy).to_string();
+                        let enriched_label = format!("L{}, r0 # Go to Addr: {}", label_idx, addy);
+                        display_str = display_str.replace(&original, &enriched_label);
+                    }
+
+                    let extra = match_instruction!(ins, target, {
+                        match target {
+                            Instruction::NewArrayWithBuffer(t) => {
+                                let arrbuf = self.get_array_buffer(t.p2.0 as usize, 0);
+                                format!("{}", print_array_vals(self, &arrbuf.1))
+                            }
+                            Instruction::NewArrayWithBufferLong(t) => {
+                                let arrbuf = self.get_array_buffer(t.p2.0 as usize, 0);
+                                format!("{}", print_array_vals(self, &arrbuf.1))
+                            }
+                            Instruction::NewArray(t) => {
+                                format!("new Array({})", t.p0.0)
+                            }
+                            Instruction::NewObjectWithBuffer(t) => {
+                                let keybuf = self.get_object_key_buffer(t.p2.0 as usize, 0);
+                                let valbuf = self.get_object_val_buffer(t.p3.0 as usize, 0);
+                                let mut joined = vec![];
+                                for (key, value) in keybuf.1.iter().zip(valbuf.1.iter()) {
+                                    joined.push(format!(
+                                        "{}: {}",
+                                        print_array_val(self, key),
+                                        print_array_val(self, value)
+                                    ));
+                                }
+                                format!("{{{}}}", joined.join(", "))
+                            }
+                            Instruction::NewObjectWithBufferLong(t) => {
+                                let keybuf = self.get_object_key_buffer(t.p2.0 as usize, 0);
+                                let valbuf = self.get_object_val_buffer(t.p3.0 as usize, 0);
+                                let mut joined = vec![];
+                                for (key, value) in keybuf.1.iter().zip(valbuf.1.iter()) {
+                                    joined.push(format!(
+                                        "{}: {}",
+                                        print_array_val(self, key),
+                                        print_array_val(self, value)
+                                    ));
+                                }
+                                format!("{{{}}}", joined.join(", "))
+                            }
+                            _ => "".to_string(),
+                        }
+                    });
+
+                    // build_instructions
+                    if extra.is_empty() {
+                        output.push(format!("{:?}\t{}", _idx, display_str));
+                    } else {
+                        output.push(format!("{:?}\t{} // {}", _idx, display_str, extra));
+                    }
+                }
+
+                // populate labels into output
+                for (lidx, line) in output.iter().enumerate() {
+                    if labels.contains_key(&(lidx as u32)) {
+                        if let Some(label) = labels.get(&(lidx as u32)) {
+                            output_buf.push(format!("\t\tL{}:", label));
+                        }
+                    }
+                    output_buf.push(line.clone());
+                }
+            }
+            output_buf.join("\n")
+        }
+        //end
+    }
+
+    pub fn get_disassembled_bytecode_for_function(&mut self, fidx: usize) -> String {
+        {
+            let mut output_buf: Vec<String> = vec![];
+            let fh = self.function_headers.get(fidx).unwrap().clone();
+
+            let bytecode = self.get_func_bytecode(fidx as u32);
+            self._reader
+                .seek(io::SeekFrom::Start(fh.offset() as u64))
+                .unwrap();
+
+            let func_name_idx = fh.func_name() as usize;
+
+            let myfunc = self.string_storage.get(func_name_idx).unwrap();
+            output_buf.push("------------------------------------------------\n".to_string());
+            let func_start = myfunc.offset;
+            let mut func_name = String::from_utf8(
+                self.string_storage_bytes
+                    [func_start as usize..(func_start + myfunc.length) as usize]
+                    .to_vec(),
+            )
+            .unwrap();
+
+            if func_name.is_empty() {
+                func_name = format!("$FUNC_{}", fidx);
+            }
+
+            // Print out the FunctionHeader type - this makes things easier to debug.
+            // There's no real spec, so I can get away with dropping a # comment here.
+            let is_large = match fh {
+                FunctionHeader::Small(_) => false,
+                FunctionHeader::Large(_) => true,
+            };
+
+            output_buf.push(format!(
+                    "{}<{}>({:?} params, {:?} registers, {:?} symbols): # Type: {}FunctionHeader - funcID: {} ({} bytes @ {})\n",
+                    match fh.flags().prohibit_invoke {
+                        FunctionHeaderFlagProhibitions::ProhibitCall => "Constructor",
+                        FunctionHeaderFlagProhibitions::ProhibitConstruct => "NCFunction",
+                        FunctionHeaderFlagProhibitions::ProhibitNone => "Function",
+                    },
+                    func_name,
+                    fh.param_count(),
+                    fh.frame_size(),
+                    fh.env_size(),
+                    if is_large { "Large" } else { "Small" },
+                    fidx,
+                    fh.byte_size(),
+                    self._reader.stream_position().unwrap(),
+                ).to_string());
+
+            let mut labels: HashMap<u32, u32> = HashMap::new();
+            let mut label_idx = 0;
+            let mut output = vec![];
+
+            for (_idx, ins) in bytecode.iter().enumerate() {
+                if fh.flags().has_exception_handler {
+                    for (idx, eh) in fh.exception_handlers().iter().enumerate() {
+                        let ehidx = idx + 1;
+                        let has_label = if _idx == eh.start as usize {
+                            label_idx += ehidx + 1;
+                            true
+                        } else if _idx == eh.end as usize {
+                            label_idx += ehidx + 2;
+                            true
+                        } else if _idx == eh.target as usize {
+                            label_idx += ehidx;
+                            true
+                        } else {
+                            false
+                        };
+
+                        if has_label {
+                            output.push(format!("\tL{}:", label_idx));
+                        }
+                    }
+                }
+
+                // Check if the instruction is a jump target
+                let mut display_str = ins.display(self);
+                if ins.is_jmp() {
+                    let addy = ins.get_address_field();
+
+                    // Track labels properly
+                    if !labels.contains_key(&addy) {
+                        label_idx += 1;
+                        labels.insert(addy, label_idx as u32);
+                    }
+
+                    let original = format!("{}", addy).to_string();
+                    let enriched_label = format!("L{}, r0 # Go to Addr: {}", label_idx, addy);
+                    display_str = display_str.replace(&original, &enriched_label);
+                }
+
+                let extra = match_instruction!(ins, target, {
+                    match target {
+                        Instruction::NewArrayWithBuffer(t) => {
+                            let arrbuf = self.get_array_buffer(t.p2.0 as usize, 0);
+                            format!("{}", print_array_vals(self, &arrbuf.1))
+                        }
+                        Instruction::NewArrayWithBufferLong(t) => {
+                            let arrbuf = self.get_array_buffer(t.p2.0 as usize, 0);
+                            format!("{}", print_array_vals(self, &arrbuf.1))
+                        }
+                        Instruction::NewArray(t) => {
+                            format!("new Array({})", t.p0.0)
+                        }
+                        Instruction::NewObjectWithBuffer(t) => {
+                            let keybuf = self.get_object_key_buffer(t.p2.0 as usize, 0);
+                            let valbuf = self.get_object_val_buffer(t.p3.0 as usize, 0);
+                            let mut joined = vec![];
+                            for (key, value) in keybuf.1.iter().zip(valbuf.1.iter()) {
+                                joined.push(format!(
+                                    "{}: {}",
+                                    print_array_val(self, key),
+                                    print_array_val(self, value)
+                                ));
+                            }
+                            format!("{{{}}}", joined.join(", "))
+                        }
+                        Instruction::NewObjectWithBufferLong(t) => {
+                            let keybuf = self.get_object_key_buffer(t.p2.0 as usize, 0);
+                            let valbuf = self.get_object_val_buffer(t.p3.0 as usize, 0);
+                            let mut joined = vec![];
+                            for (key, value) in keybuf.1.iter().zip(valbuf.1.iter()) {
+                                joined.push(format!(
+                                    "{}: {}",
+                                    print_array_val(self, key),
+                                    print_array_val(self, value)
+                                ));
+                            }
+                            format!("{{{}}}", joined.join(", "))
+                        }
+                        _ => "".to_string(),
+                    }
+                });
+
+                // build_instructions
+                if extra.is_empty() {
+                    output.push(format!("{:?}\t{}", _idx, display_str));
+                } else {
+                    output.push(format!("{:?}\t{} // {}", _idx, display_str, extra));
+                }
+            }
+
+            // populate labels into output
+            for (lidx, line) in output.iter().enumerate() {
+                if labels.contains_key(&(lidx as u32)) {
+                    if let Some(label) = labels.get(&(lidx as u32)) {
+                        output_buf.push(format!("\t\tL{}:", label));
+                    }
+                }
+                output_buf.push(line.clone());
+            }
+            output_buf.join("\n")
+        }
+    }
     // ------------------------------------------ //
     // helper methods end
     // ------------------------------------------ //
