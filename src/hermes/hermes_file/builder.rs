@@ -15,6 +15,8 @@ use crate::hermes::OverflowStringTableEntry;
 use crate::hermes::SmallStringTableEntry;
 use crate::hermes::{HermesInstruction, InstructionParser};
 
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
 pub struct StringTypePair {
     pub string: String,
