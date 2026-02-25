@@ -3,7 +3,7 @@
 #[derive(Debug)]
 pub enum ArrayTypes {
     EmptyValueSized { value: u32 },
-    NullValue {},
+    NullValue,
     TrueValue { value: bool },
     FalseValue { value: bool },
     NumberValue { value: u64 },

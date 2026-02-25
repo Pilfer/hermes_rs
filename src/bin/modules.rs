@@ -76,7 +76,7 @@ fn dump_array_vals(
             ArrayTypes::EmptyValueSized { value: val } => {
                 format!("...new Array({})", val)
             }
-            ArrayTypes::NullValue {} => {
+            ArrayTypes::NullValue => {
                 // JS null
                 "null".to_string()
             }

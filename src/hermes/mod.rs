@@ -16,7 +16,7 @@ pub mod string_kind;
 pub mod string_table;
 pub mod types;
 
-use std::io;
+use std::{fmt::Display, io};
 
 pub use function_header::{
     FunctionHeaderFlag, FunctionHeaderFlagProhibitions, SmallFunctionHeader,
@@ -27,164 +27,6 @@ pub use string_kind::{StringKind, StringKindEntry};
 pub use string_table::{OverflowStringTableEntry, SmallStringTableEntry};
 
 use array_parser::ArrayTypes;
-
-// pub type Reg8 = u8;
-/*
-
-#[derive(Debug, Copy, Clone)]
-pub struct Reg8(u8);
-impl Default for Reg8 { fn default() -> Self { Reg8(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct Reg32(u32);
-impl Default for Reg32 { fn default() -> Self { Reg32(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct UInt8(u8);
-impl Default for UInt8 { fn default() -> Self { UInt8(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct UInt16(u16);
-impl Default for UInt16 { fn default() -> Self { UInt16(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct UInt32(u32);
-impl Default for UInt32 { fn default() -> Self { UInt32(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct Addr8(i8);
-impl Default for Addr8 { fn default() -> Self { Addr8(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct Addr32(i32);
-impl Default for Addr32 { fn default() -> Self { Addr32(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct Imm32(i32);
-impl Default for Imm32 { fn default() -> Self { Imm32(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct Double(f64);
-impl Default for Double { fn default() -> Self { Double(0.0) } }
-
-// Index types - the values reference the values at {index} in StringTable, FunctionTable, and BigIntTable
-#[derive(Debug, Copy, Clone)]
-pub struct StringIDUInt8(u8);
-impl Default for StringIDUInt8 { fn default() -> Self { StringIDUInt8(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct StringIDUInt16(u16);
-impl Default for StringIDUInt16 { fn default() -> Self { StringIDUInt16(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct StringIDUInt32(u32);
-impl Default for StringIDUInt32 { fn default() -> Self { StringIDUInt32(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct FunctionIDUInt8(u8);
-impl Default for FunctionIDUInt8 { fn default() -> Self { FunctionIDUInt8(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct FunctionIDUInt16(u16);
-impl Default for FunctionIDUInt16 { fn default() -> Self { FunctionIDUInt16(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct FunctionIDUInt32(u32);
-impl Default for FunctionIDUInt32 { fn default() -> Self { FunctionIDUInt32(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct BigIntIDUInt16(u16);
-impl Default for BigIntIDUInt16 { fn default() -> Self { BigIntIDUInt16(0) } }
-
-#[derive(Debug, Copy, Clone)]
-pub struct BigIntIDUInt32(u32);
-impl Default for BigIntIDUInt32 { fn default() -> Self { BigIntIDUInt32(0) } }
-
-impl From<u8> for Reg8 {
-  fn from(value: u8) -> Self {
-      Reg8(value)
-  }
-}
-
-impl From<Reg8> for u8 {
-  fn from(value: Reg8) -> Self {
-      value.0
-  }
-}
-
-impl From<u16> for UInt16 {
-  fn from(value: u16) -> Self {
-      UInt16(value)
-  }
-}
-
-impl From<UInt16> for u16 {
-  fn from(value: UInt16) -> Self {
-      value.0
-  }
-}
-
-impl From<u32> for UInt32 {
-  fn from(value: u32) -> Self {
-      UInt32(value)
-  }
-}
-
-impl From<UInt32> for u32 {
-  fn from(value: UInt32) -> Self {
-      value.0
-  }
-}
-
-impl From<i8> for Addr8 {
-  fn from(value: i8) -> Self {
-      Addr8(value)
-  }
-}
-
-impl From<Addr8> for i8 {
-  fn from(value: Addr8) -> Self {
-      value.0
-  }
-}
-
-impl From<i32> for Addr32 {
-  fn from(value: i32) -> Self {
-      Addr32(value)
-  }
-}
-
-impl From<Addr32> for i32 {
-  fn from(value: Addr32) -> Self {
-      value.0
-  }
-}
-
-impl From<i32> for Imm32 {
-  fn from(value: i32) -> Self {
-      Imm32(value)
-  }
-}
-
-impl From<Imm32> for i32 {
-  fn from(value: Imm32) -> Self {
-      value.0
-  }
-}
-
-impl From<f64> for Double {
-  fn from(value: f64) -> Self {
-      Double(value)
-  }
-}
-
-impl From<Double> for f64 {
-  fn from(value: Double) -> Self {
-      value.0
-  }
-}
-*/
-// -- end hermes types
 
 pub trait InstructionParser {
     // fn new() -> Self;
@@ -463,24 +305,11 @@ macro_rules! define_opcode {
   pub struct $name {
     pub op: u8,
     $(
-      // pub $field: map_type!($arg),
       pub $field: $arg,
     )*
   }
 
-  // impl Default for $name {
-  //   fn default() -> Self {
-  //     Self {
-  //         op: 0,
-  //         $(
-  //           // $field: match stringify!(map_type!($arg)) {
-  //             // "Double" => 0.0 as _,
-  //             // _ => 0 as $arg,
-  //           // },
-  //         )*
-  //     }
-  //   }
-  // }
+
   impl Default for $name {
     fn default() -> Self {
         Self {
@@ -500,7 +329,6 @@ macro_rules! define_opcode {
       return Self{
         op,
         $(
-          // $field: map_decode_fn!($arg)(_r),
           $field: map_decode_fn!($arg)(_r).into(),
         )*
       }
@@ -1031,7 +859,7 @@ impl HermesInstruction {
             #[cfg(feature = "v96")]
             96 => HermesInstruction::V96(v96::Instruction::deserialize(r, op)),
             _ => {
-                panic!("Unsupported HBC version: {:?}. Check Cargo.toml features to see if this HBC version is enabled.", op);
+                panic!("Unsupported HBC version: {op}. Check Cargo.toml features to see if this HBC version is enabled.");
             }
         }
     }
@@ -1218,6 +1046,13 @@ macro_rules! match_instruction {
     };
 }
 
+fn print_string<R>(idx: impl Into<usize>, hermes_file: &HermesFile<R>) -> impl Display
+where
+    R: io::Read + io::BufRead + io::Seek
+{
+	format!("{:?}", hermes_file.get_string_from_storage_by_index(idx.into()))
+}
+
 pub fn print_array_vals<R>(hermes_file: &HermesFile<R>, array_vals: &Vec<ArrayTypes>) -> String
 where
     R: io::Read + io::BufRead + io::Seek,
@@ -1225,7 +1060,7 @@ where
     let mut js_values: Vec<String> = Vec::new();
     for arr_val in array_vals {
         let v = match arr_val {
-            ArrayTypes::NullValue {} => {
+            ArrayTypes::NullValue => {
                 // JS null
                 "null".to_string()
             }
@@ -1237,26 +1072,16 @@ where
                 // JS false
                 "false".to_string()
             }
-            ArrayTypes::NumberValue { value: val } => {
+            ArrayTypes::NumberValue { value } => {
                 // JS number
-                format!("{}", val)
+                format!("{value}")
             }
-            ArrayTypes::LongStringValue { value: val } => {
-                // JS string literal, quoted
-                let s = hermes_file.get_string_from_storage_by_index(*val as usize);
-                format!("{:?}", s)
-            }
-            ArrayTypes::ShortStringValue { value: val } => {
-                let s = hermes_file.get_string_from_storage_by_index(*val as usize);
-                format!("{:?}", s)
-            }
-            ArrayTypes::ByteStringValue { value: val } => {
-                let s = hermes_file.get_string_from_storage_by_index(*val as usize);
-                format!("{:?}", s)
-            }
-            ArrayTypes::IntegerValue { value: val } => {
+            ArrayTypes::LongStringValue { value } => print_string(*value as usize, hermes_file).to_string(),
+            ArrayTypes::ShortStringValue { value } => print_string(*value, hermes_file).to_string(),
+            ArrayTypes::ByteStringValue { value } => print_string(*value, hermes_file).to_string(),
+            ArrayTypes::IntegerValue { value } => {
                 // JS number
-                format!("{}", val)
+                format!("{value}")
             }
             _ => {
                 // fallback: JS undefined
@@ -1274,7 +1099,7 @@ where
     R: io::Read + io::BufRead + io::Seek,
 {
     match array_val {
-        ArrayTypes::NullValue {} => {
+        ArrayTypes::NullValue => {
             // JS null
             "null".to_string()
         }
@@ -1286,26 +1111,16 @@ where
             // JS false
             "false".to_string()
         }
-        ArrayTypes::NumberValue { value: val } => {
+        ArrayTypes::NumberValue { value } => {
             // JS number
-            format!("{}", val)
+            format!("{value}")
         }
-        ArrayTypes::LongStringValue { value: val } => {
-            // JS string literal, quoted
-            let s = hermes_file.get_string_from_storage_by_index(*val as usize);
-            format!("{:?}", s)
-        }
-        ArrayTypes::ShortStringValue { value: val } => {
-            let s = hermes_file.get_string_from_storage_by_index(*val as usize);
-            format!("{:?}", s)
-        }
-        ArrayTypes::ByteStringValue { value: val } => {
-            let s = hermes_file.get_string_from_storage_by_index(*val as usize);
-            format!("{:?}", s)
-        }
-        ArrayTypes::IntegerValue { value: val } => {
+		ArrayTypes::LongStringValue { value } => print_string(*value as usize, hermes_file).to_string(),
+		ArrayTypes::ShortStringValue { value } => print_string(*value, hermes_file).to_string(),
+		ArrayTypes::ByteStringValue { value } => print_string(*value, hermes_file).to_string(),
+        ArrayTypes::IntegerValue { value } => {
             // JS number
-            format!("{}", val)
+            format!("{value}")
         }
         _ => {
             // fallback: JS undefined

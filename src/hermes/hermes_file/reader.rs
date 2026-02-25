@@ -452,7 +452,7 @@ where
 
                 match tag_type {
                     NULL_TAG => {
-                        parsed_values.push(ArrayTypes::NullValue {});
+                        parsed_values.push(ArrayTypes::NullValue);
                     }
                     TRUE_TAG => {
                         parsed_values.push(ArrayTypes::TrueValue { value: true });
@@ -605,7 +605,7 @@ where
 
                 match tag_type {
                     NULL_TAG => {
-                        parsed_values.push(ArrayTypes::NullValue {});
+                        parsed_values.push(ArrayTypes::NullValue);
                     }
                     TRUE_TAG => {
                         parsed_values.push(ArrayTypes::TrueValue { value: true });
@@ -757,7 +757,7 @@ where
 
                 match tag_type {
                     NULL_TAG => {
-                        parsed_values.push(ArrayTypes::NullValue {});
+                        parsed_values.push(ArrayTypes::NullValue);
                     }
                     TRUE_TAG => {
                         parsed_values.push(ArrayTypes::TrueValue { value: true });
@@ -886,10 +886,7 @@ where
             });
         }
 
-        // Remove the clone
-        let vec = &self.function_bytecode;
-        vec.to_vec()
-        // self.function_bytecode.clone()
+        self.function_bytecode.clone()
     }
 
     // ------------------------------------------ //

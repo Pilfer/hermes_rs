@@ -27,12 +27,6 @@ where
     where
         W: Write + io::Seek + Read + BufRead,
     {
-        // This function could definitely use some refactoring.
-        // Currently we're manually calculating the offsets of each section of the file and using that as
-        // a jumping point. This obviously isn't ideal, but we're still hammering out bugs.
-        // It's also worth noting that I'm still learning rust, so excuse any bad practices.
-        // Please open an issue or PR with suggestions!
-
         let _base_offset = w.stream_position().unwrap() + self.header.size() as u64; // should always be 128
 
         let mut c = _base_offset;
@@ -115,9 +109,6 @@ where
 
         c = align_offset(c);
 
-        // Mostly using this as a debugging value. Compiler will remove it.
-        let _function_header_offset = c;
-
         // Now that we have all the offset locations, we can get to writing the actual data at those locations.
         // This whole process will be rewritten once all the bugs are hammered out.
         w.seek(io::SeekFrom::Start(string_kind_offset)).unwrap();
@@ -170,21 +161,6 @@ where
         }
 
         w.seek(io::SeekFrom::Start(bytecode_offset)).unwrap();
-
-        // Debug...
-        // println!("string_kind_offset: {:?}", string_kind_offset);
-        // println!("identifier_hash_offset: {:?}", identifier_hash_offset);
-        // println!("string_table_offset: {:?}", string_table_offset);
-        // println!("overflow_string_table_offset: {:?}", overflow_string_table_offset);
-        // println!("string_storage_offset: {:?}", string_storage_offset);
-        // println!("array_buffer_offset: {:?}", array_buffer_offset);
-        // println!("object_key_buffer_offset: {:?}", object_key_buffer_offset);
-        // println!("object_val_buffer_offset: {:?}", object_val_buffer_offset);
-        // println!("big_int_table_offset: {:?}", big_int_table_offset);
-        // println!("reg_exp_table_offset: {:?}", reg_exp_table_offset);
-        // println!("cjs_module_table_offset: {:?}", cjs_module_table_offset);
-        // println!("function_source_table_offset: {:?}", function_source_table_offset);
-        // println!("bytecode_offset: {:?}", bytecode_offset);
 
         align_writer(w, 4);
 
@@ -264,7 +240,7 @@ where
 
             match fh {
                 FunctionHeader::Small(sfh) => {
-                    let is_overflowed = sfh.flags.overflowed || sfh.is_overflowed_check();
+                    let is_overflowed = sfh.flags.overflowed || sfh.is_overflowed();
                     if is_overflowed {
                         let mut lfh = LargeFunctionHeader::from(sfh.clone());
 
@@ -348,7 +324,6 @@ where
 
         // Seek to the large_write_offset, as thats the last place we wrote a LargeFunctionHeader or SmallFunctionHeader Exception info/debug info
         w.seek(io::SeekFrom::Start(large_write_offset)).unwrap();
-        println!("1111111 large_write_offset: {:?}", large_write_offset);
 
         // Write large function headers in a nicer way
         // for (offset, mut lfh) in large_headers {
@@ -399,58 +374,6 @@ where
         self.header.serialize(w);
         align_writer(w, 4);
     }
-
-    // Don't use this.
-    /*
-    pub fn write_function_headers<W>(&mut self, w: &mut W)
-    where
-        W: Write + io::Seek,
-    {
-        // Relevant code from Hermes:
-        // https://github.com/facebook/hermes/blob/main/lib/BCGen/HBC/BytecodeStream.cpp#L233
-
-        // Populator code
-        // https://github.com/facebook/hermes/blob/main/lib/BCGen/HBC/BytecodeDataProvider.cpp#L211
-
-        // TODO: Make this functional. This is a temporary solution.
-        for mut func_header in self.function_headers.clone() {
-            // This is where we're going to go back to if it's a LargeFunctionHeader
-            let _current_pos = w.stream_position().unwrap();
-
-            // https://github.com/facebook/hermes/blob/d964f6b125426f919ad30fb09ff09b9d5f041743/include/hermes/BCGen/HBC/BytecodeFileFormat.h#L341
-
-            // Probably can delete this - lost in sauce atm.
-            if func_header.is_overflowed_check() {
-                func_header.set_overflowed(true);
-            }
-
-            if !func_header.flags().overflowed {
-                func_header.serialize(w);
-            } else {
-                align_writer(w, 4);
-
-                // We're definitely overflowed and dealing with a large function header here
-                // --> _assuming_ the add_function function was used in builder.rs <--
-                // There's always a chance that someone will try to feed this a SmallFunctionHeader that is overflowed.
-
-                // So we need to write a SmallFunctionHeader with the overflowed flag set to true
-                // The offset and info offset are updated in the main serialize function
-                match func_header {
-                    FunctionHeader::Large(lfh) => {
-                        let nsfh: SmallFunctionHeader = lfh.into();
-                        nsfh.serialize(w);
-                    }
-                    _ => {
-                        panic!(
-                            "Function header is not a LargeFunctionHeader. Use the correct type."
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    */
 
     pub fn write_string_kinds<W>(&self, w: &mut W)
     where

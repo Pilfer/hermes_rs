@@ -59,8 +59,8 @@ impl Serializable for StringKindEntry {
         R: io::Read + io::BufRead + io::Seek,
     {
         match _version {
-            0..=71 => StringKindEntry::Old(StringKindEntryOld::deserialize(r, _version)),
-            72_u32..=u32::MAX => StringKindEntry::New(StringKindEntryNew::deserialize(r, _version)),
+            ..72 => StringKindEntry::Old(StringKindEntryOld::deserialize(r, _version)),
+            72.. => StringKindEntry::New(StringKindEntryNew::deserialize(r, _version)),
         }
     }
 
