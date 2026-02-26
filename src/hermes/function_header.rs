@@ -4,7 +4,7 @@ use crate::hermes::debug_info::DebugInfoOffsets;
 use crate::hermes::decode::{decode_u32, decode_u8, read_bitfield};
 use crate::hermes::encode::{encode_u32, encode_u8, write_bitfield};
 use crate::hermes::exception_handler::ExceptionHandlerInfo;
-use crate::hermes::Serializable;
+use crate::util::Serializable;
 
 // For deserializing
 pub fn get_large_info_offset(offset: u32, info_offset: u32) -> u32 {

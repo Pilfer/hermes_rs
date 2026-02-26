@@ -15,6 +15,9 @@ pub mod regexp_table;
 pub mod string_kind;
 pub mod string_table;
 pub mod types;
+pub(crate) mod util;
+
+pub use util::Serializable;
 
 use std::{fmt::Display, io};
 
