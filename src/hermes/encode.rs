@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 pub(crate) fn encode_u8<W>(w: &mut W, value: u8)
 where
     W: std::io::Write,
@@ -7,7 +6,6 @@ where
         .expect("Could not encode u8");
 }
 
-#[allow(dead_code)]
 pub(crate) fn encode_i8<W>(w: &mut W, value: i8)
 where
     W: std::io::Write,
@@ -16,7 +14,6 @@ where
         .expect("Could not encode i8");
 }
 
-#[allow(dead_code)]
 pub(crate) fn encode_u16<W>(w: &mut W, value: u16)
 where
     W: std::io::Write,
@@ -25,7 +22,7 @@ where
         .expect("Could not encode u16");
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) fn encode_i16<W>(w: &mut W, value: i16)
 where
     W: std::io::Write,
@@ -34,7 +31,6 @@ where
         .expect("Could not encode i16");
 }
 
-#[allow(dead_code)]
 pub(crate) fn encode_u32<W>(w: &mut W, value: u32)
 where
     W: std::io::Write,
@@ -51,7 +47,6 @@ where
         .expect("Could not encode i32");
 }
 
-#[allow(dead_code)]
 pub(crate) fn encode_f64<W>(w: &mut W, value: f64)
 where
     W: std::io::Write,
@@ -60,7 +55,6 @@ where
         .expect("Could not encode f64");
 }
 
-#[allow(dead_code)]
 pub(crate) fn encode_u64<W>(w: &mut W, value: u64)
 where
     W: std::io::Write,
@@ -69,7 +63,6 @@ where
         .expect("Could not encode u64");
 }
 
-#[allow(dead_code)]
 pub(crate) fn write_bitfield(bits: &mut [u8], start_bit: usize, num_bits: usize, value: u32) {
     let mut written_bits = 0;
     let mut bit_idx = start_bit;
@@ -98,7 +91,7 @@ pub(crate) fn write_bitfield(bits: &mut [u8], start_bit: usize, num_bits: usize,
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) fn encode_sleb128<W>(w: &mut W, value: i64)
 where
     W: std::io::Write,
@@ -116,7 +109,6 @@ where
     }
 }
 
-#[allow(dead_code)]
 pub fn align_writer<W>(w: &mut W, alignment: usize)
 where
     W: std::io::Write + std::io::Seek,

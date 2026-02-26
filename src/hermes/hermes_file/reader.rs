@@ -1094,7 +1094,6 @@ where
             fh.env_size()
         );
 
-        // #[allow(unused_mut)]
         let mut instructions_list = vec![];
 
         let mut byte_iter = bytecode_buf.iter();
@@ -1254,7 +1253,6 @@ where
                     self._reader.stream_position().unwrap(),
                 );
 
-                // #[allow(unused_mut)]
                 let mut instructions_list = vec![];
 
                 let mut byte_iter = bytecode_buf.iter();

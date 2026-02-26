@@ -380,7 +380,7 @@ impl Serializable for DebugFileRegion {
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub struct FunctionDebugInfoDeserializer {
     data: Vec<u8>,
     offset: u32,

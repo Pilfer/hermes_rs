@@ -1,6 +1,5 @@
 use std::io;
 
-#[allow(dead_code)]
 pub(crate) fn decode_f64<R>(r: &mut R) -> f64
 where
     R: ?Sized + io::Read,
@@ -16,7 +15,6 @@ where
     f64::from_bits(result)
 }
 
-#[allow(dead_code)]
 pub(crate) fn decode_u64<R>(r: &mut R) -> u64
 where
     R: ?Sized + io::Read,
@@ -47,7 +45,6 @@ where
     result
 }
 
-#[allow(dead_code)]
 pub(crate) fn decode_i32<R>(r: &mut R) -> i32
 where
     R: ?Sized + io::Read,
@@ -63,7 +60,6 @@ where
     result
 }
 
-#[allow(dead_code)]
 pub(crate) fn decode_u16<R>(r: &mut R) -> u16
 where
     R: ?Sized + io::Read,
@@ -89,7 +85,6 @@ where
     buf[0]
 }
 
-#[allow(dead_code)]
 pub(crate) fn decode_i8<R>(r: &mut R) -> i8
 where
     R: ?Sized + io::Read,
@@ -97,7 +92,7 @@ where
     decode_u8(r) as i8
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) fn decode_sleb128<R>(r: &mut R) -> i64
 where
     R: ?Sized + io::Read,
@@ -141,7 +136,6 @@ pub(crate) fn read_bitfield(bits: &[u8], start_bit: usize, num_bits: usize) -> u
     value
 }
 
-#[allow(dead_code)]
 pub(crate) fn align_reader<R>(r: &mut R, num_bytes: u64) -> io::Result<u64>
 where
     R: io::Read + io::Seek,
