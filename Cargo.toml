@@ -31,7 +31,3 @@ specta-util = { version = "0.0.7", optional = true }
 
 [profile.release]
 strip = true
-
-[[bin]]
-name = "decompile"
-path = "src/bin/decompile/decompile.rs"
