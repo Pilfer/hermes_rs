@@ -1,0 +1,798 @@
+use std::io;
+
+use crate::HermesFile;
+#[cfg(feature = "v76")]
+use crate::InstructionParser as _;
+
+#[macro_export]
+macro_rules! versions {
+    ($macro_name:ident with semi) => {
+        $macro_name!(
+            [v76, V76, "v76"]
+            [v84, V84, "v84"]
+            [v89, V89, "v89"]
+            [v90, V90, "v90"]
+            [v93, V93, "v93"]
+            [v94, V94, "v94"]
+            [v95, V95, "v95"]
+            [v96, V96, "v96"]
+        );
+    };
+
+    ($macro_name:ident) => {
+        $macro_name!(
+            [v76, V76, "v76"]
+            [v84, V84, "v84"]
+            [v89, V89, "v89"]
+            [v90, V90, "v90"]
+            [v93, V93, "v93"]
+            [v94, V94, "v94"]
+            [v95, V95, "v95"]
+            [v96, V96, "v96"]
+        )
+    };
+
+}
+
+#[macro_export]
+macro_rules! map_type {
+    (Reg8)             => { u8 };
+    (Reg32)            => { u32 };
+    (UInt8)            => { u8 };
+    (UInt16)           => { u16 };
+    (UInt32)           => { u32 };
+    (Addr8)            => { i8 };
+    (Addr32)           => { i32 };
+    (Imm32)            => { i32 };
+    (Double)           => { f64 };
+    (StringIDUInt8)    => { u8 };
+    (StringIDUInt16)   => { u16 };
+    (StringIDUInt32)   => { u32 };
+    (FunctionIDUInt8)  => { u8 };
+    (FunctionIDUInt16) => { u16 };
+    (FunctionIDUInt32) => { u32 };
+    (BigIntIDUInt16)   => { u16 };
+    (BigIntIDUInt32)   => { u32 };
+}
+
+#[macro_export]
+macro_rules! map_size {
+    (Reg8)             => { 1 };
+    (Reg32)            => { 4 };
+    (UInt8)            => { 1 };
+    (UInt16)           => { 2 };
+    (UInt32)           => { 4 };
+    (Addr8)            => { 1 };
+    (Addr32)           => { 4 };
+    (Imm32)            => { 4 };
+    (Double)           => { 8 };
+    (StringIDUInt8)    => { 1 };
+    (StringIDUInt16)   => { 2 };
+    (StringIDUInt32)   => { 4 };
+    (FunctionIDUInt8)  => { 1 };
+    (FunctionIDUInt16) => { 2 };
+    (FunctionIDUInt32) => { 4 };
+    (BigIntIDUInt16)   => { 2 };
+    (BigIntIDUInt32)   => { 4 };
+}
+
+#[macro_export]
+macro_rules! map_decode_fn {
+    (Reg8)             => { hermes::decode::decode_u8 };
+    (Reg32)            => { hermes::decode::decode_u32 };
+    (UInt8)            => { hermes::decode::decode_u8 };
+    (UInt16)           => { hermes::decode::decode_u16 };
+    (UInt32)           => { hermes::decode::decode_u32 };
+    (Addr8)            => { hermes::decode::decode_i8 };
+    (Addr32)           => { hermes::decode::decode_i32 };
+    (Imm32)            => { hermes::decode::decode_i32 };
+    (Double)           => { hermes::decode::decode_f64 };
+    (StringIDUInt8)    => { hermes::decode::decode_u8 };
+    (StringIDUInt16)   => { hermes::decode::decode_u16 };
+    (StringIDUInt32)   => { hermes::decode::decode_u32 };
+    (FunctionIDUInt8)  => { hermes::decode::decode_u8 };
+    (FunctionIDUInt16) => { hermes::decode::decode_u16 };
+    (FunctionIDUInt32) => { hermes::decode::decode_u32 };
+    (BigIntIDUInt16)   => { hermes::decode::decode_u16 };
+    (BigIntIDUInt32)   => { hermes::decode::decode_u32 };
+}
+
+#[macro_export]
+macro_rules! map_encode_fn {
+    (Reg8)             => { hermes::encode::encode_u8 };
+    (Reg32)            => { hermes::encode::encode_u32 };
+    (UInt8)            => { hermes::encode::encode_u8 };
+    (UInt16)           => { hermes::encode::encode_u16 };
+    (UInt32)           => { hermes::encode::encode_u32 };
+    (Addr8)            => { hermes::encode::encode_i8 };
+    (Addr32)           => { hermes::encode::encode_i32 };
+    (Imm32)            => { hermes::encode::encode_i32 };
+    (Double)           => { hermes::encode::encode_f64 };
+    (StringIDUInt8)    => { hermes::encode::encode_u8 };
+    (StringIDUInt16)   => { hermes::encode::encode_u16 };
+    (StringIDUInt32)   => { hermes::encode::encode_u32 };
+    (FunctionIDUInt8)  => { hermes::encode::encode_u8 };
+    (FunctionIDUInt16) => { hermes::encode::encode_u16 };
+    (FunctionIDUInt32) => { hermes::encode::encode_u32 };
+    (BigIntIDUInt16)   => { hermes::encode::encode_u16 };
+    (BigIntIDUInt32)   => { hermes::encode::encode_u32 };
+}
+
+#[macro_export]
+macro_rules! get_field {
+    ($struct:expr, $field:ident) => {
+        $struct.$field
+    };
+}
+
+#[macro_export]
+macro_rules! set_field {
+    ($struct:expr, $field:ident, $value:expr) => {
+        $struct.$field = $value;
+    };
+}
+
+#[macro_export]
+macro_rules! define_opcode {
+($(#[$meta:meta])* $name:ident, $($field:ident : $arg:tt),*) => {
+    $(#[$meta])*
+    #[cfg_attr(feature = "specta", derive(specta::Type))]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+    #[derive(Debug, Copy, Clone)]
+    pub struct $name {
+        pub op: u8,
+        $(
+            pub $field: $arg
+        ),*
+    }
+
+
+    impl Default for $name {
+        fn default() -> Self {
+            Self {
+                op: 0,
+                $(
+                    $field: Default::default()
+                ),*
+            }
+        }
+    }
+
+    impl hermes::InstructionParser for $name {
+    fn deserialize<R>(_r: &mut R, op: u8) -> Self
+    where
+        R: std::io::BufRead + std::io::Seek,
+    {
+        return Self {
+            op,
+            $(
+                $field: map_decode_fn!($arg)(_r).into()
+            ),*
+        }
+    }
+
+    // Returns true if the instruction has a return target.
+    fn has_ret_target(&self) -> bool {
+      match op_to_instr(self.op) {
+        Instruction::Call(_) |
+        Instruction::Construct(_) |
+        Instruction::Call1(_) |
+        Instruction::CallDirect(_) |
+        Instruction::Call2(_) |
+        Instruction::Call3(_) |
+        Instruction::Call4(_) |
+        Instruction::CallLong(_) |
+        Instruction::ConstructLong(_) |
+        Instruction::CallDirectLongIndex(_)  => true,
+        _ => false,
+      }
+    }
+
+    fn is_jmp(&self) -> bool {
+      match op_to_instr(self.op) {
+        Instruction::Jmp(_) |
+        Instruction::JmpLong(_) |
+        Instruction::JmpTrue(_) |
+        Instruction::JmpTrueLong(_) |
+        Instruction::JmpFalse(_) |
+        Instruction::JmpFalseLong(_) |
+        Instruction::JmpUndefined(_) |
+        Instruction::JmpUndefinedLong(_) |
+        Instruction::SaveGenerator(_) |
+        Instruction::SaveGeneratorLong(_) |
+        Instruction::JLess(_) |
+        Instruction::JLessLong(_) |
+        Instruction::JNotLess(_) |
+        Instruction::JNotLessLong(_) |
+        Instruction::JLessN(_) |
+        Instruction::JLessNLong(_) |
+        Instruction::JNotLessN(_) |
+        Instruction::JNotLessNLong(_) |
+        Instruction::JLessEqual(_) |
+        Instruction::JLessEqualLong(_) |
+        Instruction::JNotLessEqual(_) |
+        Instruction::JNotLessEqualLong(_) |
+        Instruction::JLessEqualN(_) |
+        Instruction::JLessEqualNLong(_) |
+        Instruction::JNotLessEqualN(_) |
+        Instruction::JNotLessEqualNLong(_) |
+        Instruction::JGreater(_) |
+        Instruction::JGreaterLong(_) |
+        Instruction::JNotGreater(_) |
+        Instruction::JNotGreaterLong(_) |
+        Instruction::JGreaterN(_) |
+        Instruction::JGreaterNLong(_) |
+        Instruction::JNotGreaterN(_) |
+        Instruction::JNotGreaterNLong(_) |
+        Instruction::JGreaterEqual(_) |
+        Instruction::JGreaterEqualLong(_) |
+        Instruction::JNotGreaterEqual(_) |
+        Instruction::JNotGreaterEqualLong(_) |
+        Instruction::JGreaterEqualN(_) |
+        Instruction::JGreaterEqualNLong(_) |
+        Instruction::JNotGreaterEqualN(_) |
+        Instruction::JNotGreaterEqualNLong(_) |
+        Instruction::JEqual(_) |
+        Instruction::JEqualLong(_) |
+        Instruction::JNotEqual(_) |
+        Instruction::JNotEqualLong(_) |
+        Instruction::JStrictEqual(_) |
+        Instruction::JStrictEqualLong(_) |
+        Instruction::JStrictNotEqual(_) |
+        Instruction::JStrictNotEqualLong(_) => true,
+
+        // This is a special case for the switch instruction
+        // p1 = Addr32, so we can assume it's an address
+        Instruction::SwitchImm(_) => true,
+        _ => false,
+      }
+    }
+
+    fn serialize<W>(&self, _w: &mut W)
+    where
+        W: std::io::Write,
+    {
+        hermes::encode::encode_u8(_w, self.op);
+        $(
+            map_encode_fn!($arg)(_w, self.$field.into());
+        )*
+    }
+
+    fn size(&self) -> usize {
+        let mut total_size = 0;
+        total_size += 1; // opcode
+        $(
+            total_size += map_size!($arg);
+        )*
+        total_size
+    }
+
+    fn get_address_field(&self) -> u32 {
+        $(
+            if matches!(stringify!($arg), "Addr8" | "Addr32") {
+                return self.$field.into();
+            }
+        )*
+        0 // Return 0 if no address field found
+    }
+
+    fn get_string_field_names(&self) -> Vec<&str> {
+        #[allow(unused_mut)]
+        let mut fields = vec![];
+        $(
+            if stringify!($arg).contains("StringID") {
+            fields.push(stringify!($field));
+            }
+        )*
+        fields
+    }
+
+    fn get_function_field_names(&self) -> Vec<&str> {
+        #[allow(unused_mut)]
+        let mut fields = vec![];
+        $(
+            if stringify!($arg).contains("FunctionID") {
+                fields.push(stringify!($field));
+            }
+        )*
+        fields
+    }
+
+    fn display<R>(&self, _hermes: &hermes::hermes_file::HermesFile<R>) -> String
+    where
+        R: io::Read + io::BufRead + io::Seek
+    {
+
+        #[allow(unused_mut)]
+        let mut display_string = format!("{} ", op_to_str(self.op));
+        $(
+            display_string = match stringify!($arg) {
+                "StringIDUInt8" | "StringIDUInt16" | "StringIDUInt32" => format!("{} \"{}\"", display_string, _hermes.get_string_from_storage_by_index(self.$field.into())),
+                "FunctionIDUInt8" | "FunctionIDUInt16" | "FunctionIDUInt32" => {
+                let index: usize = Into::<usize>::into(self.$field);
+                let target_function = _hermes.function_headers[index].func_name();
+                let func_str = _hermes
+                    .get_string_from_storage_by_index(target_function as usize)
+                    .to_string();
+
+                // functions don't always have names, so in that case we'll return the function index
+                if func_str.is_empty() {
+                    format!("{} Function<$FUNC_{}>", display_string, self.$field)
+                } else {
+                    format!("{} Function<{}>", display_string, func_str)
+                }
+                },
+                "BigIntIDUInt16" | "BigIntIDUInt32" => {
+                // TODO: Make this work
+                // let bigint_addr = self.$field.into() as usize;
+                let bigint_addr: usize = Into::<usize>::into(self.$field);
+                format!("{} {} ", display_string, bigint_addr)
+                },
+                _ => {
+                let tmp = match stringify!($arg) {
+                    "Reg8" | "Reg32" => {
+                    format!("{} r{},", display_string, self.$field )
+                    },
+                    "Addr8" | "Addr32" => {
+                    format!("{} {},", display_string, self.$field )
+                    }
+                    _ => {
+                    format!("{} {},", display_string, self.$field )
+                    }
+                };
+                // prepend "," to tmp
+                format!("{} ", tmp)
+                }
+            };
+
+            // stip trailing comma
+
+        )*
+        format!("{}", display_string.trim_end_matches(", ").trim().to_string())
+
+    }
+    }
+};
+}
+
+/// Implement the InstructionParser trait for all instructions so we can use
+/// the `deserialize` method to read instructions from a file/stream in a more
+/// generic way. Also implements `serialize`, `display` and `size` methods.
+#[macro_export]
+macro_rules! impl_instruction_parser {
+($($variant:ident => $insn:ident),*) => {
+  #[expect(unused_variables, non_snake_case)]
+  impl hermes::InstructionParser for Instruction {
+    fn deserialize<R: std::io::Read + std::io::BufRead + std::io::Seek>(reader: &mut R, op: u8) -> Self {
+        match op_to_instr(op) {
+            $(
+            Instruction::$variant($insn) => {
+              let insn: $insn = $insn::deserialize(reader, op);
+              Instruction::$variant(insn)
+            },
+          )*
+        }
+      }
+
+      fn serialize<W: std::io::Write>(&self, _w: &mut W) {
+        match self {
+          $(
+              Instruction::$variant($insn) => {
+                $insn.serialize(_w);
+              }
+          )*
+        }
+      }
+
+      fn display<R>(&self, _hermes: &hermes::hermes_file::HermesFile<R>) -> String
+      where
+      R: io::Read + io::BufRead + io::Seek
+      {
+        match self {
+          $(
+            Instruction::$insn(insn) => insn.display(_hermes),
+          )*
+        }
+      }
+
+      fn get_string_field_names(&self) -> Vec<&str> {
+        match self {
+          $(
+            Instruction::$insn(insn) => insn.get_string_field_names(),
+          )*
+        }
+      }
+
+      fn get_function_field_names(&self) -> Vec<&str> {
+        match self {
+          $(
+            Instruction::$insn(insn) => insn.get_string_field_names(),
+          )*
+        }
+      }
+
+      fn size(&self) -> usize {
+        match self {
+          $(
+            Instruction::$insn(insn) => insn.size(),
+          )*
+        }
+      }
+
+      fn is_jmp(&self) -> bool {
+        match self {
+          $(
+            Instruction::$insn(insn) => insn.is_jmp(),
+          )*
+        }
+      }
+
+      fn get_address_field(&self) -> u32 {
+        match self {
+          $(
+            Instruction::$insn(insn) => insn.get_address_field(),
+          )*
+        }
+      }
+  }
+}
+}
+
+#[macro_export]
+macro_rules! build_instructions {
+($(
+    $(#[$meta:meta])*
+    ($opcode:expr, $instruction:ident, $($operand:ident : $type:ident),*)
+),*) => {
+    use std::io;
+    #[expect(unused_imports)]
+    use hermes::types::{Reg8, Reg32, UInt8, UInt16, UInt32, Addr8, Addr32, Imm32, Double, StringIDUInt8, StringIDUInt16, StringIDUInt32, FunctionIDUInt8, FunctionIDUInt16, FunctionIDUInt32, BigIntIDUInt16, BigIntIDUInt32};
+
+    $(define_opcode!($(#[$meta])* $instruction, $($operand : $type),*);)*
+
+    #[cfg_attr(feature = "specta", derive(specta::Type))]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+    #[derive(Debug, Copy)]
+    #[repr(u8)]
+    pub enum Instruction {
+        $(
+            $(#[$meta])*
+            $instruction($instruction),
+        )*
+    }
+
+    impl Clone for Instruction {
+        fn clone(&self) -> Self {
+            *self
+        }
+    }
+
+    pub fn op_to_str(op: u8) -> &'static str {
+        match op {
+            $(
+                $opcode => stringify!($instruction),
+            )*
+            _ => "unknown",
+        }
+    }
+
+    pub fn op_to_instr(op: u8) -> Instruction {
+        #[expect(clippy::needless_update)]
+        match op {
+            $(
+                $opcode => Instruction::$instruction($instruction{op, ..Default::default()}),
+            )*
+            _ => Instruction::Unreachable(Unreachable { op }),
+        }
+    }
+
+    pub fn str_to_op(instr: &str) -> u8 {
+        match instr {
+            $(
+                stringify!($instruction) => $opcode,
+            )*
+            _ => 0,
+        }
+    }
+
+    pub fn instr_to_op(instr: Instruction) -> u8 {
+        match instr {
+            $(
+                Instruction::$instruction(_) => $opcode,
+            )*
+        }
+    }
+
+    impl_instruction_parser!($($instruction => $instruction),*);
+
+};
+}
+
+macro_rules! instructions_def {
+    ($([$version:ident, $version_upper:ident, $version_str:literal])*) => {$(
+        #[cfg(feature = $version_str)]
+        #[macro_use]
+        pub mod $version;
+    )*};
+}
+
+versions!(instructions_def with semi);
+
+macro_rules! instruction_def {
+    ($([$version:ident, $version_upper:ident, $version_str:literal])*) => {
+        #[cfg_attr(feature = "specta", derive(specta::Type))]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+        #[derive(Debug, Copy, Clone)]
+        pub enum HermesInstruction {
+            $(
+                #[cfg(feature = $version_str)]
+                $version_upper($version::Instruction),
+            )*
+        }
+    };
+}
+
+versions!(instruction_def with semi);
+
+impl HermesInstruction {
+    pub fn display<R>(&self, _hermes: &HermesFile<R>) -> String
+    where
+        R: io::Read + io::BufRead + io::Seek,
+    {
+        match self {
+            #[cfg(feature = "v76")]
+            HermesInstruction::V76(instruction) => instruction.display(_hermes),
+            #[cfg(feature = "v84")]
+            HermesInstruction::V84(instruction) => instruction.display(_hermes),
+            #[cfg(feature = "v89")]
+            HermesInstruction::V89(instruction) => instruction.display(_hermes),
+            #[cfg(feature = "v90")]
+            HermesInstruction::V90(instruction) => instruction.display(_hermes),
+            #[cfg(feature = "v93")]
+            HermesInstruction::V93(instruction) => instruction.display(_hermes),
+            #[cfg(feature = "v94")]
+            HermesInstruction::V94(instruction) => instruction.display(_hermes),
+            #[cfg(feature = "v95")]
+            HermesInstruction::V95(instruction) => instruction.display(_hermes),
+            #[cfg(feature = "v96")]
+            HermesInstruction::V96(instruction) => instruction.display(_hermes),
+        }
+    }
+
+    pub fn is_jmp(&self) -> bool {
+        match self {
+            #[cfg(feature = "v76")]
+            HermesInstruction::V76(instruction) => instruction.is_jmp(),
+            #[cfg(feature = "v84")]
+            HermesInstruction::V84(instruction) => instruction.is_jmp(),
+            #[cfg(feature = "v89")]
+            HermesInstruction::V89(instruction) => instruction.is_jmp(),
+            #[cfg(feature = "v90")]
+            HermesInstruction::V90(instruction) => instruction.is_jmp(),
+            #[cfg(feature = "v93")]
+            HermesInstruction::V93(instruction) => instruction.is_jmp(),
+            #[cfg(feature = "v94")]
+            HermesInstruction::V94(instruction) => instruction.is_jmp(),
+            #[cfg(feature = "v95")]
+            HermesInstruction::V95(instruction) => instruction.is_jmp(),
+            #[cfg(feature = "v96")]
+            HermesInstruction::V96(instruction) => instruction.is_jmp(),
+        }
+    }
+
+    pub fn get_address_field(&self) -> u32 {
+        match self {
+            #[cfg(feature = "v76")]
+            HermesInstruction::V76(instruction) => instruction.get_address_field(),
+            #[cfg(feature = "v84")]
+            HermesInstruction::V84(instruction) => instruction.get_address_field(),
+            #[cfg(feature = "v89")]
+            HermesInstruction::V89(instruction) => instruction.get_address_field(),
+            #[cfg(feature = "v90")]
+            HermesInstruction::V90(instruction) => instruction.get_address_field(),
+            #[cfg(feature = "v93")]
+            HermesInstruction::V93(instruction) => instruction.get_address_field(),
+            #[cfg(feature = "v94")]
+            HermesInstruction::V94(instruction) => instruction.get_address_field(),
+            #[cfg(feature = "v95")]
+            HermesInstruction::V95(instruction) => instruction.get_address_field(),
+            #[cfg(feature = "v96")]
+            HermesInstruction::V96(instruction) => instruction.get_address_field(),
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        match self {
+            #[cfg(feature = "v76")]
+            HermesInstruction::V76(instruction) => instruction.size(),
+            #[cfg(feature = "v84")]
+            HermesInstruction::V84(instruction) => instruction.size(),
+            #[cfg(feature = "v89")]
+            HermesInstruction::V89(instruction) => instruction.size(),
+            #[cfg(feature = "v90")]
+            HermesInstruction::V90(instruction) => instruction.size(),
+            #[cfg(feature = "v93")]
+            HermesInstruction::V93(instruction) => instruction.size(),
+            #[cfg(feature = "v94")]
+            HermesInstruction::V94(instruction) => instruction.size(),
+            #[cfg(feature = "v95")]
+            HermesInstruction::V95(instruction) => instruction.size(),
+            #[cfg(feature = "v96")]
+            HermesInstruction::V96(instruction) => instruction.size(),
+        }
+    }
+
+    pub fn serialize<W>(&self, w: &mut W)
+    where
+        W: std::io::Write,
+    {
+        match self {
+            #[cfg(feature = "v76")]
+            HermesInstruction::V76(instruction) => instruction.serialize(w),
+            #[cfg(feature = "v84")]
+            HermesInstruction::V84(instruction) => instruction.serialize(w),
+            #[cfg(feature = "v89")]
+            HermesInstruction::V89(instruction) => instruction.serialize(w),
+            #[cfg(feature = "v90")]
+            HermesInstruction::V90(instruction) => instruction.serialize(w),
+            #[cfg(feature = "v93")]
+            HermesInstruction::V93(instruction) => instruction.serialize(w),
+            #[cfg(feature = "v94")]
+            HermesInstruction::V94(instruction) => instruction.serialize(w),
+            #[cfg(feature = "v95")]
+            HermesInstruction::V95(instruction) => instruction.serialize(w),
+            #[cfg(feature = "v96")]
+            HermesInstruction::V96(instruction) => instruction.serialize(w),
+        }
+    }
+
+    pub fn deserialize<R>(r: &mut R, op: u8) -> Self
+    where
+        R: io::Read + io::BufRead + io::Seek,
+    {
+        match op {
+            #[cfg(feature = "v76")]
+            76 => HermesInstruction::V76(v76::Instruction::deserialize(r, op)),
+            #[cfg(feature = "v84")]
+            84 => HermesInstruction::V84(v84::Instruction::deserialize(r, op)),
+            #[cfg(feature = "v89")]
+            89 => HermesInstruction::V89(v89::Instruction::deserialize(r, op)),
+            #[cfg(feature = "v90")]
+            90 => HermesInstruction::V90(v90::Instruction::deserialize(r, op)),
+            #[cfg(feature = "v93")]
+            93 => HermesInstruction::V93(v93::Instruction::deserialize(r, op)),
+            #[cfg(feature = "v94")]
+            94 => HermesInstruction::V94(v94::Instruction::deserialize(r, op)),
+            #[cfg(feature = "v95")]
+            95 => HermesInstruction::V95(v95::Instruction::deserialize(r, op)),
+            #[cfg(feature = "v96")]
+            96 => HermesInstruction::V96(v96::Instruction::deserialize(r, op)),
+            _ => {
+                panic!("Unsupported HBC version: {op}. Check Cargo.toml features to see if this HBC version is enabled.");
+            }
+        }
+    }
+}
+
+pub trait IntoParentInstruction {
+    fn into_parent(self) -> HermesInstruction;
+}
+
+macro_rules! impl_into_parent {
+    ($([$version:ident, $version_upper:ident, $version_str:literal])*) => {
+        $(
+            #[cfg(feature = $version_str)]
+            impl IntoParentInstruction for $version::Instruction {
+                fn into_parent(self) -> HermesInstruction {
+                    HermesInstruction::$version_upper(self)
+                }
+            }
+        )*
+    };
+}
+
+versions!(impl_into_parent with semi);
+
+/**
+ * This macro is used to define a list of instructions for a given version of Hermes.
+ * It will return a `Vec<Instruction>` that can be serialized into the bytecode section
+ * of a Hermes executable.
+```rust
+use hermes_rs::define_instructions;
+let instructions = define_instructions!(
+    hermes_rs::v96, // Version is required
+    LoadConstString { r0: 0.into(), p0: 1.into() },
+    DirectEval {
+        r0: 0.into(),
+        r1: 0.into(),
+        p0: 0.into()
+    },
+    Ret { r0: 0.into() },
+).unwrap();
+```
+ */
+#[macro_export]
+macro_rules! define_instructions {
+  ($version:path, $($instr:ident { $($field:ident: $value:expr),* }),* $(,)?) => {
+      {
+          use $version::{str_to_op, Instruction};
+          use $version::*;
+
+          Some(vec![
+            $(
+                Instruction::$instr ($instr{
+                    op: str_to_op(stringify!($instr)),
+                    $($field: $value),*
+                }),
+            )*
+        ])
+      }
+  };
+}
+
+#[macro_export]
+macro_rules! define_instructions_alt {
+  ($version:path, $($instr:ident { $($field:ident: $value:expr),* }),* $(,)?) => {
+      {
+          use $version::{str_to_op, Instruction};
+          use $version::*;
+
+          Some(vec![
+              $(
+                  Instruction::$instr ($instr{
+                      op: str_to_op(stringify!($instr)),
+                      $($field: $value),*
+                  }),
+              )*
+          ])
+      }
+  };
+}
+
+#[macro_export]
+macro_rules! match_instruction {
+    ($instruction:expr, $insn_var:ident, $code:block) => {
+        match $instruction {
+            #[cfg(feature = "v76")]
+            HermesInstruction::V76($insn_var) => {
+                use $crate::hermes::instructions::v76::*;
+                $code
+            }
+            #[cfg(feature = "v84")]
+            HermesInstruction::V84($insn_var) => {
+                use $crate::hermes::instructions::v84::*;
+                $code
+            }
+            #[cfg(feature = "v89")]
+            HermesInstruction::V89($insn_var) => {
+                use $crate::hermes::instructions::v89::*;
+                $code
+            }
+            #[cfg(feature = "v90")]
+            HermesInstruction::V90($insn_var) => {
+                use $crate::hermes::instructions::v90::*;
+                $code
+            }
+            #[cfg(feature = "v93")]
+            HermesInstruction::V93($insn_var) => {
+                use $crate::hermes::instructions::v93::*;
+                $code
+            }
+            #[cfg(feature = "v94")]
+            HermesInstruction::V94($insn_var) => {
+                use $crate::hermes::instructions::v94::*;
+                $code
+            }
+            #[cfg(feature = "v95")]
+            HermesInstruction::V95($insn_var) => {
+                use $crate::hermes::instructions::v95::*;
+                $code
+            }
+            #[cfg(feature = "v96")]
+            HermesInstruction::V96($insn_var) => {
+                use $crate::hermes::instructions::v96::*;
+                $code
+            }
+        }
+    };
+}

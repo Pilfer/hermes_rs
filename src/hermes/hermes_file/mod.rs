@@ -22,7 +22,7 @@ use super::{HermesInstruction, HermesStructReader};
 //
 // Alternatively, we could just write the data section first and then write the
 // header and offsets at the end of the file.
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]

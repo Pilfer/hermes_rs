@@ -7,7 +7,7 @@ fn main() {
     let hbc_file = &args[1];
 
     if args.len() < 2 {
-        println!("Usage: strings <hbc_file>");
+        println!("Usage: {} <hbc_file>", args[0]);
         std::process::exit(1);
     }
 

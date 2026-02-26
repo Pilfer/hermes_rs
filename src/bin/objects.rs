@@ -9,7 +9,7 @@ fn main() {
     let hbc_file = &args[1];
 
     if args.len() < 2 {
-        println!("Usage: strings <hbc_file>");
+        println!("Usage: {} <hbc_file>", args[0]);
         std::process::exit(1);
     }
 
@@ -38,7 +38,7 @@ fn main() {
         let mut js_values: Vec<String> = Vec::new();
         for arr_val in array_vals {
             let v = match arr_val {
-                ArrayTypes::NullValue {} => {
+                ArrayTypes::NullValue => {
                     // JS null
                     "null".to_string()
                 }

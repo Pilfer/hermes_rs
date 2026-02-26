@@ -345,7 +345,7 @@ where
     {
         let func: &mut FunctionHeader = match func_header {
             FunctionHeader::Small(f) => {
-                if f.is_overflowed_check() {
+                if f.is_overflowed() {
                     f.flags.overflowed = true;
                     let large = LargeFunctionHeader::from(f.clone());
                     &mut FunctionHeader::Large(large)
@@ -354,7 +354,7 @@ where
                 }
             }
             FunctionHeader::Large(f) => {
-                if f.is_overflowed_check() {
+                if f.is_overflowed() {
                     f.flags.overflowed = true;
                     let small = SmallFunctionHeader::from(f.clone());
                     &mut FunctionHeader::Small(small)

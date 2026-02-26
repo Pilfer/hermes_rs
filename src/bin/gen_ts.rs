@@ -5,7 +5,7 @@ fn main() {
     generate_typescript_types();
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn write_def_file(filename: &str, contents: String) {
     use std::fs::{create_dir_all, File};
     use std::io::Write;

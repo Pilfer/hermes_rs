@@ -4,7 +4,7 @@ use crate::hermes::debug_info::DebugInfoOffsets;
 use crate::hermes::decode::{decode_u32, decode_u8, read_bitfield};
 use crate::hermes::encode::{encode_u32, encode_u8, write_bitfield};
 use crate::hermes::exception_handler::ExceptionHandlerInfo;
-use crate::hermes::Serializable;
+use crate::util::Serializable;
 
 // For deserializing
 pub fn get_large_info_offset(offset: u32, info_offset: u32) -> u32 {
@@ -71,7 +71,7 @@ impl SmallFunctionHeader {
      * Check if any of the fields in the header are overflowed per their defined bit size.
      * See: https://github.com/facebook/hermes/blob/main/include/hermes/BCGen/HBC/BytecodeFileFormat.h#L259
      */
-    pub fn is_overflowed_check(&self) -> bool {
+    pub fn is_overflowed(&self) -> bool {
         let is_overflowed = |value: u32, bits: u32| -> bool { value > (1 << bits) - 1 };
 
         is_overflowed(self.offset, 25)
@@ -323,21 +323,9 @@ impl LargeFunctionHeader {
         self.byte_size = new_size;
     }
 
-    pub fn is_overflowed_check(&self) -> bool {
+    pub fn is_overflowed(&self) -> bool {
         // Technically LargeFunctionHeaders aren't "overflowed", but I'm relying on this bool elsewhere
         true
-        /*
-        let is_overflowed = |value: u32| -> bool { value > (1 << 17) - 1 };
-        is_overflowed(self.offset)
-            || is_overflowed(self.param_count)
-            || is_overflowed(self.byte_size)
-            || is_overflowed(self.func_name)
-            || is_overflowed(self.info_offset)
-            || is_overflowed(self.frame_size)
-            || is_overflowed(self.env_size)
-            || is_overflowed(self.highest_read_cache_index)
-            || is_overflowed(self.highest_write_cache_index)
-        */
     }
 }
 
@@ -348,7 +336,6 @@ impl Default for LargeFunctionHeader {
 }
 impl From<LargeFunctionHeader> for SmallFunctionHeader {
     fn from(lfh: LargeFunctionHeader) -> Self {
-        // let (calculated_offset, calculated_info_offset) = get_large_info_offset_pair(lfh.info_offset);
         SmallFunctionHeader {
             offset: lfh.offset,
             param_count: lfh.param_count,
@@ -683,10 +670,10 @@ impl FunctionHeader {
         }
     }
 
-    pub fn is_overflowed_check(&mut self) -> bool {
+    pub fn is_overflowed(&mut self) -> bool {
         match self {
-            FunctionHeader::Small(fh) => fh.is_overflowed_check(),
-            FunctionHeader::Large(fh) => fh.is_overflowed_check(),
+            FunctionHeader::Small(fh) => fh.is_overflowed(),
+            FunctionHeader::Large(fh) => fh.is_overflowed(),
         }
     }
 }

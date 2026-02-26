@@ -10,7 +10,6 @@ use crate::hermes::Serializable;
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug)]
 pub struct HermesHeader {
-    // file: &'a HermesFile<'a>,
     pub magic: u64,
     pub version: u32,
     pub sha1: [u8; 20], // sha1 is the sha1 hash of the input source  JS file. Example: "eval(`print(123);`)" = a97c8302dab90bec7184a9183b22b43badd57a65
